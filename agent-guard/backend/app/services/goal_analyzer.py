@@ -59,8 +59,9 @@ class GoalAnalyzerService:
         if not _openai_disabled and self.api_key and self.api_key.strip() and self.api_key != "your_key_here":
             try:
                 from openai import AsyncOpenAI
-                self.client = AsyncOpenAI(api_key=self.api_key, timeout=2.0)
+                self.client = AsyncOpenAI(api_key=self.api_key, timeout=1.0)
             except Exception as e:
+                _openai_disabled = True
                 logger.warning(f"Could not initialize OpenAI client in GoalAnalyzer: {e}")
 
     async def analyze_goal(self, user_goal: str, user_constraints: List[str] = None) -> Dict[str, Any]:
@@ -83,7 +84,7 @@ class GoalAnalyzerService:
                     response_format={"type": "json_object"},
                     temperature=0.1,
                     max_tokens=400,
-                    timeout=2.0
+                    timeout=1.0
                 )
                 parsed = json.loads(response.choices[0].message.content)
                 return self._sanitize_policy(parsed, user_goal, user_constraints)

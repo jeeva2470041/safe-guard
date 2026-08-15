@@ -54,9 +54,21 @@ export default function App() {
   };
 
   if (currentGoalId) {
-    return <Dashboard goalId={currentGoalId} onReset={handleReset} />;
+    return (
+      <Dashboard
+        goalId={currentGoalId}
+        onReset={handleReset}
+        sessionStatus={sessionStatus}
+      />
+    );
   }
 
-  return <GoalSetup onStart={handleStart} sessionStatus={sessionStatus} />;
+  return (
+    <GoalSetup
+      onStart={handleStart}
+      sessionStatus={sessionStatus}
+    />
+  );
 }
+
 

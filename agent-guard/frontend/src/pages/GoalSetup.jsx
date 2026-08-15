@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Shield, Plus, X, Lock, ChevronRight, Cpu, Layers, Radio, Zap } from 'lucide-react';
 import Header from '../components/Header';
+import ConnectedAgentCard from '../components/ConnectedAgentCard';
+import ConnectIdeModal from '../components/ConnectIdeModal';
 import { analyzeGoal } from '../services/api';
 
 /**
- * GoalSetup — Page where the user enters a goal, analyzes its policy,
- * confirms the System Understanding, and starts the OpenAI agent loop.
+ * GoalSetup — Home / Setup page for Agent Guard.
+ * Features prominent [+ CONNECT IDE] integration and dynamic policy formulation.
  */
-export default function GoalSetup({ onStart }) {
+export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
   const [userGoal, setUserGoal] = useState(
     'Create a portfolio website using React with a dark theme. Do not modify the backend.'
   );
@@ -19,6 +21,7 @@ export default function GoalSetup({ onStart }) {
   const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [goalPolicy, setGoalPolicy] = useState(null);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   const addConstraint = () => {
     const trimmed = newConstraint.trim();
@@ -65,44 +68,37 @@ export default function GoalSetup({ onStart }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header agentStatus="IDLE" />
+      <Header
+        agentStatus="IDLE"
+        sessionStatus={sessionStatus}
+        onOpenConnectModal={() => setConnectModalOpen(true)}
+      />
 
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-2xl animate-fade-in-up">
+      <main className="flex-1 flex items-center justify-center px-6 py-10">
+        <div className="w-full max-w-3xl animate-fade-in-up space-y-6">
           {/* Hero */}
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25 animate-pulse-glow">
-              <Shield size={32} className="text-white" />
+          <div className="text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/25 animate-pulse-glow">
+              <Shield size={28} className="text-white" />
             </div>
             <h2 className="text-2xl font-bold text-[var(--color-text-primary)] mb-1">
               Agent Guard — Runtime Security Gateway
             </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] max-w-lg mx-auto leading-relaxed">
-              Enter any natural language goal. The system dynamically extracts its security policy, boundaries, and scope before agent authorization.
+            <p className="text-xs text-[var(--color-text-secondary)] max-w-lg mx-auto leading-relaxed">
+              Agent Guard protects the actions of your connected AI agent with real-time goal integrity, dynamic policy generation, and PreToolUse authorization.
             </p>
           </div>
 
-          {/* Antigravity Live Bridge Banner */}
-          <div className="mb-6 glass-card p-4 border border-cyan-500/30 bg-cyan-950/20 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
-              <div>
-                <div className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                  <Radio size={13} className="text-cyan-400 animate-pulse" />
-                  ANTIGRAVITY RUNTIME BRIDGE ACTIVE
-                </div>
-                <div className="text-[0.75rem] text-[var(--color-text-muted)] mt-0.5">
-                  Give any prompt in Antigravity. Agent Guard will automatically capture the goal, generate policy, and switch to live monitoring.
-                </div>
-              </div>
-            </div>
-            <span className="text-[0.65rem] uppercase font-mono px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-              READY
-            </span>
-          </div>
+          {/* Connected Agent Quick Status / Connect Card */}
+          <ConnectedAgentCard
+            status={sessionStatus}
+            onOpenConnectModal={() => setConnectModalOpen(true)}
+            onStatusChange={onStatusChange}
+          />
 
           {/* Form Card */}
           <div className="glass-card p-6 space-y-5">
+
             {/* Goal Input */}
             <div>
               <label className="text-[0.7rem] uppercase tracking-wider text-[var(--color-text-muted)] font-semibold mb-2 block">
@@ -300,10 +296,19 @@ export default function GoalSetup({ onStart }) {
           </div>
 
           <p className="text-center text-[0.65rem] text-[var(--color-text-muted)] mt-4">
-            AI agents are dynamic. Permissions are generated dynamically based on accepted goal policy.
+            Agent Guard protects the actions of your connected AI agent.
           </p>
         </div>
       </main>
+
+      {/* Connect IDE Modal */}
+      <ConnectIdeModal
+        isOpen={connectModalOpen}
+        onClose={() => setConnectModalOpen(false)}
+        initialStatus={sessionStatus}
+        onStatusChange={onStatusChange}
+      />
     </div>
   );
 }
+

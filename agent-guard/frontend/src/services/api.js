@@ -109,5 +109,17 @@ export async function bindSession(conversationId, goalId, agent = 'antigravity')
   return res.data;
 }
 
+export async function connectAgent(sessionId = null, conversationId = null) {
+  const res = await api.post('/api/agent/connect', { sessionId, conversationId });
+  return res.data;
+}
+
+export async function disconnectAgent(sessionId = null, conversationId = null) {
+  const res = await api.post('/api/agent/disconnect', { sessionId, conversationId });
+  return res.data;
+}
+
 export default api;
+
+
 

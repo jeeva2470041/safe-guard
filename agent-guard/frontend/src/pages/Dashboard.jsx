@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import Header from '../components/Header';
 import GoalCard from '../components/GoalCard';
 import GoalIntegrityCard from '../components/GoalIntegrityCard';
@@ -11,12 +11,14 @@ import GoalIntegrityTrendChart from '../components/GoalIntegrityTrendChart';
 import AgentPausedInterventionModal from '../components/AgentPausedInterventionModal';
 import AgentBehaviorSummary from '../components/AgentBehaviorSummary';
 import GoalVersionHistory from '../components/GoalVersionHistory';
-import AntigravityStatus from '../components/AntigravityStatus';
+import ConnectedAgentCard from '../components/ConnectedAgentCard';
+import ConnectIdeModal from '../components/ConnectIdeModal';
 import { usePolling } from '../hooks/usePolling';
 import {
   getGoal,
   getActions,
   getDashboard,
+  getAgentStatus,
   approveAction,
   rejectAction,
   resetGoal,
@@ -26,10 +28,21 @@ import {
 } from '../services/api';
 
 /**
- * Dashboard — V5 AI Security Operations Center dashboard.
+ * Dashboard — V5 AI Security Operations Center dashboard with live IDE connection management.
  */
-export default function Dashboard({ goalId, onReset }) {
+export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChange }) {
   const [selectedAction, setSelectedAction] = useState(null);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const activityTimelineRef = useRef(null);
+
+  // Poll agent status specifically for dashboard
+  const { data: liveAgentStatus } = usePolling(
+    useCallback(() => getAgentStatus(), []),
+    1500,
+    true
+  );
+
+  const effectiveStatus = liveAgentStatus || sessionStatus;
 
   // Poll goal data
   const { data: goal } = usePolling(
@@ -105,11 +118,20 @@ export default function Dashboard({ goalId, onReset }) {
     }
   };
 
+  const scrollToTimeline = () => {
+    const el = document.getElementById('activity-timeline-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header
         agentStatus={agentStatus}
         onReset={handleReset}
+        sessionStatus={effectiveStatus}
+        onOpenConnectModal={() => setConnectModalOpen(true)}
       />
 
       <main className="flex-1 max-w-[1440px] mx-auto w-full px-6 py-6 space-y-6">
@@ -148,9 +170,14 @@ export default function Dashboard({ goalId, onReset }) {
 
         {/* Main Dashboard 2-Column Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column — Goal Policy & Telemetry Cards */}
+          {/* Left Column — Connected Agent Card, Goal Policy & Telemetry Cards */}
           <div className="lg:col-span-4 space-y-5">
-            <AntigravityStatus />
+            <ConnectedAgentCard
+              status={effectiveStatus}
+              onOpenConnectModal={() => setConnectModalOpen(true)}
+              onViewActivity={scrollToTimeline}
+              onStatusChange={onStatusChange}
+            />
             <GoalCard goal={goal} />
             <StatsCards dashboard={dashboard} />
             <GoalIntegrityCard
@@ -164,7 +191,7 @@ export default function Dashboard({ goalId, onReset }) {
           </div>
 
           {/* Right Column — Live Activity Timeline & Behavior Summary */}
-          <div className="lg:col-span-8 space-y-5">
+          <div id="activity-timeline-section" className="lg:col-span-8 space-y-5">
             <ActivityTimeline
               actions={actions || []}
               onApprove={handleApprove}
@@ -183,6 +210,15 @@ export default function Dashboard({ goalId, onReset }) {
         action={selectedAction}
         onClose={() => setSelectedAction(null)}
       />
+
+      {/* Connect IDE Modal */}
+      <ConnectIdeModal
+        isOpen={connectModalOpen}
+        onClose={() => setConnectModalOpen(false)}
+        initialStatus={effectiveStatus}
+        onStatusChange={onStatusChange}
+      />
     </div>
   );
 }
+

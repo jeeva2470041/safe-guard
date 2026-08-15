@@ -114,11 +114,11 @@ async def start_or_update_antigravity_session(
         existing_goal = await db.goals.find_one({"goalId": goal_id})
         last_prompt = existing_session.get("lastPrompt", "")
 
-        # If prompt is identical or empty, simply touch lastSeenAt
+        # If prompt is identical or empty, simply touch lastSeenAt and reactivate session
         if not cleaned_prompt or cleaned_prompt == last_prompt:
             await db.agent_sessions.update_one(
                 {"conversationId": conversation_id},
-                {"$set": {"lastSeenAt": now_iso, "workspacePaths": workspace_paths}}
+                {"$set": {"lastSeenAt": now_iso, "workspacePaths": workspace_paths, "status": "ACTIVE"}}
             )
             policy = existing_goal.get("goalPolicy") if existing_goal else {}
             current_ver = existing_goal.get("goalVersion", 1) if existing_goal else 1
@@ -151,24 +151,53 @@ async def start_or_update_antigravity_session(
             "status": "ACTIVE"
         }
 
-        await db.goals.update_one(
-            {"goalId": goal_id},
-            {
-                "$set": {
-                    "userGoal": cleaned_prompt,
-                    "constraints": new_policy.get("constraints", []),
-                    "goalPolicy": new_policy,
-                    "goalVersion": new_version_num,
-                    "status": "ACTIVE",
-                    "pauseReason": None,
-                    "recentDivergentAction": None,
-                    "updatedAt": now_iso
-                },
-                "$push": {
-                    "versionHistory": new_version_entry
-                }
+        if not existing_goal:
+            # Recreate missing goal document in DB
+            new_policy = await analyzer.analyze_goal(cleaned_prompt)
+            initial_version = {
+                "version": 1,
+                "userGoal": cleaned_prompt,
+                "constraints": new_policy.get("constraints", []),
+                "goalPolicy": new_policy,
+                "createdAt": now_iso,
+                "changeReason": f"Antigravity prompt updated in turn {invocation_num}",
+                "status": "ACTIVE"
             }
-        )
+            goal_doc = {
+                "goalId": goal_id,
+                "conversationId": conversation_id,
+                "userGoal": cleaned_prompt,
+                "constraints": new_policy.get("constraints", []),
+                "goalPolicy": new_policy,
+                "goalVersion": 1,
+                "versionHistory": [initial_version],
+                "status": "ACTIVE",
+                "agent": agent,
+                "workspacePaths": workspace_paths,
+                "createdAt": now_iso,
+                "updatedAt": now_iso,
+            }
+            await db.goals.update_one({"goalId": goal_id}, {"$set": goal_doc}, upsert=True)
+        else:
+            await db.goals.update_one(
+                {"goalId": goal_id},
+                {
+                    "$set": {
+                        "userGoal": cleaned_prompt,
+                        "constraints": new_policy.get("constraints", []),
+                        "goalPolicy": new_policy,
+                        "goalVersion": new_version_num,
+                        "status": "ACTIVE",
+                        "pauseReason": None,
+                        "recentDivergentAction": None,
+                        "updatedAt": now_iso
+                    },
+                    "$push": {
+                        "versionHistory": new_version_entry
+                    }
+                },
+                upsert=True
+            )
 
         await db.agent_sessions.update_one(
             {"conversationId": conversation_id},
@@ -251,7 +280,7 @@ async def resolve_active_goal_for_session(
             if goal:
                 await db.agent_sessions.update_one(
                     {"_id": session["_id"]},
-                    {"$set": {"lastSeenAt": now_iso}, "$inc": {"interceptedCount": 1}}
+                    {"$set": {"lastSeenAt": now_iso, "status": "ACTIVE"}, "$inc": {"interceptedCount": 1}}
                 )
                 return goal
 
@@ -307,17 +336,66 @@ async def resolve_active_goal_for_session(
     return latest_active_goal
 
 
+async def connect_antigravity_session(session_id: Optional[str] = None, conversation_id: Optional[str] = None) -> Dict[str, Any]:
+    """Reactivate the most recent Antigravity session or a specific session."""
+    db = get_database()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    query: Dict[str, Any] = {"agent": "antigravity"}
+    if session_id or conversation_id:
+        target_id = session_id or conversation_id
+        query["$or"] = [{"sessionId": target_id}, {"conversationId": target_id}]
+
+    # Find the most recently seen session matching query
+    session = await db.agent_sessions.find_one(query, sort=[("lastSeenAt", -1)])
+    if not session:
+        # Fallback to any recent session
+        session = await db.agent_sessions.find_one({"agent": "antigravity"}, sort=[("createdAt", -1)])
+
+    if session:
+        await db.agent_sessions.update_one(
+            {"_id": session["_id"]},
+            {"$set": {"status": "ACTIVE", "lastSeenAt": now_iso}}
+        )
+        logger.info(f"[SESSION CONNECT] Reconnected Antigravity session {session.get('sessionId')}")
+
+    return await get_antigravity_connection_status()
+
+
+async def disconnect_antigravity_session(session_id: Optional[str] = None, conversation_id: Optional[str] = None) -> Dict[str, Any]:
+    """Terminate the active Antigravity session/connection without deleting historical logs."""
+    db = get_database()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    query = {"agent": "antigravity", "status": "ACTIVE"}
+    if session_id or conversation_id:
+        target_id = session_id or conversation_id
+        query["$or"] = [{"sessionId": target_id}, {"conversationId": target_id}]
+
+    result = await db.agent_sessions.update_many(
+        query,
+        {"$set": {"status": "DISCONNECTED", "disconnectedAt": now_iso}}
+    )
+    
+    logger.info(f"[SESSION DISCONNECT] Disconnected {result.modified_count} active Antigravity sessions")
+    return {
+        "status": "disconnected",
+        "modifiedCount": result.modified_count,
+        "disconnectedAt": now_iso
+    }
+
+
 async def get_antigravity_connection_status() -> Dict[str, Any]:
     """Retrieve real-time Antigravity connection status based on actual events received."""
     db = get_database()
 
-    # Find the most recent active session
+    # Find the most recent active session with status ACTIVE
     latest_session = await db.agent_sessions.find_one(
-        {"agent": "antigravity"},
+        {"agent": "antigravity", "status": "ACTIVE"},
         sort=[("lastSeenAt", -1)]
     )
 
-    # Count total intercepted actions
+    # Count total intercepted actions across all antigravity events
     total_intercepted = await db.actions.count_documents({
         "agentId": {"$in": ["antigravity", "GOOGLE-ANTIGRAVITY"]}
     })
@@ -326,20 +404,45 @@ async def get_antigravity_connection_status() -> Dict[str, Any]:
         return {
             "connected": False,
             "agent": "antigravity",
-            "status": "WAITING_FOR_ANTIGRAVITY",
+            "status": "NOT_CONNECTED",
             "lastSeenAt": None,
             "activeSessionId": None,
             "activeConversationId": None,
             "activeGoalId": None,
             "goalVersion": 1,
             "userGoal": None,
-            "interceptedCount": total_intercepted
+            "workspace": None,
+            "lastAction": None,
+            "interceptedCount": total_intercepted,
+            "allowedCount": 0,
+            "blockedCount": 0,
+            "approvalCount": 0
         }
 
     # Fetch associated goal info
     goal_info = None
-    if latest_session.get("goalId"):
-        goal_info = await db.goals.find_one({"goalId": latest_session["goalId"]}, {"_id": 0})
+    goal_id = latest_session.get("goalId")
+    if goal_id:
+        goal_info = await db.goals.find_one({"goalId": goal_id}, {"_id": 0})
+
+    # Fetch latest action for this session/agent
+    last_action_doc = await db.actions.find_one(
+        {"agentId": {"$in": ["antigravity", "GOOGLE-ANTIGRAVITY"]}},
+        sort=[("timestamp", -1)],
+        projection={"_id": 0, "actionId": 1, "actionType": 1, "target": 1, "decision": 1, "timestamp": 1, "description": 1}
+    )
+
+    # Aggregate action decision counts for active goal or agent
+    query_actions = {"goalId": goal_id} if goal_id else {"agentId": {"$in": ["antigravity", "GOOGLE-ANTIGRAVITY"]}}
+    allowed_count = await db.actions.count_documents({**query_actions, "decision": {"$in": ["ALLOW", "APPROVED", "allow"]}})
+    blocked_count = await db.actions.count_documents({**query_actions, "decision": {"$in": ["DENY", "BLOCK", "deny"]}})
+    approval_count = await db.actions.count_documents({**query_actions, "decision": {"$in": ["REQUIRE_APPROVAL", "ASK", "ask"]}})
+
+    # Extract workspace path if available
+    workspace_paths = latest_session.get("workspacePaths", [])
+    workspace = workspace_paths[0] if workspace_paths and len(workspace_paths) > 0 else (
+        goal_info.get("workspacePaths", [None])[0] if goal_info and goal_info.get("workspacePaths") else None
+    )
 
     return {
         "connected": True,
@@ -348,9 +451,15 @@ async def get_antigravity_connection_status() -> Dict[str, Any]:
         "lastSeenAt": latest_session.get("lastSeenAt"),
         "activeSessionId": latest_session.get("sessionId"),
         "activeConversationId": latest_session.get("conversationId"),
-        "activeGoalId": latest_session.get("goalId"),
+        "activeGoalId": goal_id,
         "goalVersion": latest_session.get("goalVersion", 1),
         "userGoal": latest_session.get("userGoal") or (goal_info.get("userGoal") if goal_info else None),
         "goalPolicy": goal_info.get("goalPolicy") if goal_info else None,
-        "interceptedCount": total_intercepted or latest_session.get("interceptedCount", 0)
+        "workspace": workspace,
+        "lastAction": last_action_doc,
+        "interceptedCount": total_intercepted or latest_session.get("interceptedCount", 0),
+        "allowedCount": allowed_count,
+        "blockedCount": blocked_count,
+        "approvalCount": approval_count
     }
+

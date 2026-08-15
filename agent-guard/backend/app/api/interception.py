@@ -159,3 +159,36 @@ async def bind_agent_session(req: SessionBindRequest):
     """Manually bind an active Antigravity session/conversation to a goal."""
     res = await bind_session(req.conversationId, req.goalId, req.agent)
     return {"status": "bound", "session": res}
+
+
+class ConnectRequest(BaseModel):
+    sessionId: Optional[str] = None
+    conversationId: Optional[str] = None
+
+
+@router.post("/connect")
+@router.post("/session/connect")
+async def connect_agent(req: Optional[ConnectRequest] = None):
+    """Connect/reactivate active Antigravity session."""
+    from app.services.session_service import connect_antigravity_session
+    session_id = req.sessionId if req else None
+    conversation_id = req.conversationId if req else None
+    result = await connect_antigravity_session(session_id, conversation_id)
+    return result
+
+
+class DisconnectRequest(BaseModel):
+    sessionId: Optional[str] = None
+    conversationId: Optional[str] = None
+
+
+@router.post("/disconnect")
+@router.post("/session/disconnect")
+async def disconnect_agent(req: Optional[DisconnectRequest] = None):
+    """Disconnect active Antigravity session without deleting historical data."""
+    from app.services.session_service import disconnect_antigravity_session
+    session_id = req.sessionId if req else None
+    conversation_id = req.conversationId if req else None
+    result = await disconnect_antigravity_session(session_id, conversation_id)
+    return result
+
