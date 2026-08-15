@@ -1,0 +1,24 @@
+{
+  "agent-guard-interceptor": {
+    "enabled": true,
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python ../agent-guard/integrations/antigravity/agent_guard_preinvocation_hook.py",
+        "timeout": 15
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ../agent-guard/integrations/antigravity/agent_guard_hook.py",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  }
+}
