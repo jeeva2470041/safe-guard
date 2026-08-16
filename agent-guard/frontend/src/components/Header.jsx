@@ -1,9 +1,10 @@
 import { Shield, Plus, Radio } from 'lucide-react';
+import GuardModeToggle from './GuardModeToggle';
 
 /**
- * Header — AGENT GUARD branding with agent status indicator and Connect IDE button.
+ * Header — AGENT GUARD branding with agent status indicator, Guard Mode Toggle, and Connect IDE button.
  */
-export default function Header({ agentStatus = 'IDLE', onReset, sessionStatus, onOpenConnectModal }) {
+export default function Header({ agentStatus = 'IDLE', onReset, sessionStatus, onOpenConnectModal, onGuardModeChange }) {
   const statusConfig = {
     IDLE: { color: 'bg-gray-500', text: 'IDLE', pulse: false },
     ACTIVE: { color: 'bg-blue-500', text: 'AGENT READY', pulse: false },
@@ -38,8 +39,10 @@ export default function Header({ agentStatus = 'IDLE', onReset, sessionStatus, o
           </div>
         </div>
 
-        {/* Right Section: Connected Agent Badge + Connect IDE button + System Status + Reset */}
+        {/* Right Section: Mode Toggle + Connected Agent Badge + Connect IDE button + System Status + Reset */}
         <div className="flex items-center gap-3">
+          {/* Interactive Guard Mode Toggle */}
+          <GuardModeToggle onChange={onGuardModeChange} />
           {/* Connected Agent Quick Badge */}
           <div
             onClick={onOpenConnectModal}
