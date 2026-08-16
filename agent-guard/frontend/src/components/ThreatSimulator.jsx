@@ -126,47 +126,47 @@ export default function ThreatSimulator({ goalId }) {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="space-y-4 sm:space-y-6 animate-fade-in-up">
       {/* Top Banner */}
-      <div className="glass-card p-6 bg-gradient-to-r from-red-950/40 via-[var(--color-bg-card)] to-purple-950/30 border border-red-500/30 relative overflow-hidden">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-rose-700 flex items-center justify-center shadow-lg shadow-red-500/25">
-              <ShieldAlert size={26} className="text-white" />
+      <div className="glass-card p-4 sm:p-6 bg-gradient-to-r from-red-950/40 via-[var(--color-bg-card)] to-purple-950/30 border border-red-500/30 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 relative z-10">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-red-500 to-rose-700 flex items-center justify-center shadow-lg shadow-red-500/25 shrink-0">
+              <ShieldAlert size={22} className="text-white sm:w-[26px] sm:h-[26px]" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-white tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-bold text-white tracking-tight">
                   Red Team Adversarial Threat Simulator
                 </h2>
-                <span className="text-[0.65rem] font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 uppercase">
+                <span className="text-[0.6rem] sm:text-[0.65rem] font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 uppercase shrink-0">
                   Active Sandbox
                 </span>
               </div>
-              <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+              <p className="text-[0.7rem] sm:text-xs text-[var(--color-text-secondary)] mt-0.5 leading-relaxed">
                 Stress-test the Agent Guard Security Gateway with OWASP LLM Top 10 attack vectors and verify real-time blocking before execution.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-primary)] px-3 py-1.5 rounded-lg border border-[var(--color-border)]">
-              Target Goal: {goalId || 'G-ACTIVE-SESSION'}
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            <span className="text-[0.65rem] sm:text-xs font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-primary)] px-2.5 py-1 rounded-lg border border-[var(--color-border)] truncate">
+              Target: {goalId || 'G-ACTIVE-SESSION'}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         {/* Left Column: Preset Attack Vectors & Custom Payload Form */}
         <div className="lg:col-span-6 space-y-4">
-          <div className="glass-card p-5 space-y-4">
+          <div className="glass-card p-4 sm:p-5 space-y-3.5 sm:space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)] flex items-center gap-2">
-                <Flame size={15} className="text-red-400" />
+                <Flame size={14} className="text-red-400 shrink-0" />
                 Select Adversarial Attack Vector
               </span>
-              <span className="text-[0.65rem] text-[var(--color-text-muted)]">
+              <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)]">
                 5 Pre-configured exploits
               </span>
             </div>
@@ -179,32 +179,32 @@ export default function ThreatSimulator({ goalId }) {
                   <div
                     key={v.id}
                     onClick={() => setSelectedVector(v.id)}
-                    className={`p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${
+                    className={`p-3 sm:p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${
                       isSelected
                         ? 'bg-red-950/20 border-red-500/50 shadow-md shadow-red-500/10'
                         : 'bg-[var(--color-bg-primary)]/70 border-[var(--color-border)] hover:border-red-500/30'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
                         <div
-                          className={`w-8 h-8 rounded-lg bg-gradient-to-br ${v.color} flex items-center justify-center shrink-0 mt-0.5`}
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br ${v.color} flex items-center justify-center shrink-0 mt-0.5`}
                         >
-                          <Icon size={16} className="text-white" />
+                          <Icon size={15} className="text-white" />
                         </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-[var(--color-text-primary)]">
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-[var(--color-text-primary)] truncate">
                             {v.name}
                           </h4>
-                          <p className="text-[0.7rem] text-[var(--color-text-secondary)] mt-0.5 line-clamp-2">
+                          <p className="text-[0.65rem] sm:text-[0.7rem] text-[var(--color-text-secondary)] mt-0.5 line-clamp-2 leading-relaxed">
                             {v.description}
                           </p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-[0.6rem] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--color-bg-secondary)] border border-[var(--color-border)] text-cyan-300">
+                          <div className="flex items-center gap-1.5 sm:gap-2 mt-2 flex-wrap">
+                            <span className="text-[0.55rem] sm:text-[0.6rem] font-mono font-semibold px-2 py-0.5 rounded bg-[var(--color-bg-secondary)] border border-[var(--color-border)] text-cyan-300 break-all">
                               {v.actionType}: {v.target}
                             </span>
                             <span
-                              className={`text-[0.6rem] font-bold px-1.5 py-0.5 rounded border ${v.badgeColor}`}
+                              className={`text-[0.55rem] sm:text-[0.6rem] font-bold px-1.5 py-0.5 rounded border shrink-0 ${v.badgeColor}`}
                             >
                               {v.owasp}
                             </span>
@@ -219,9 +219,9 @@ export default function ThreatSimulator({ goalId }) {
                           handleRunAttack(v.id);
                         }}
                         disabled={loading}
-                        className="btn-primary text-[0.7rem] px-3 py-1.5 shrink-0 flex items-center gap-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-none shadow-md shadow-red-600/20"
+                        className="btn-primary text-[0.65rem] sm:text-[0.7rem] px-2.5 sm:px-3 py-1.5 shrink-0 flex items-center gap-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border-none shadow-md shadow-red-600/20"
                       >
-                        <Play size={12} fill="currentColor" />
+                        <Play size={11} fill="currentColor" />
                         RUN
                       </button>
                     </div>
@@ -231,13 +231,13 @@ export default function ThreatSimulator({ goalId }) {
             </div>
 
             {/* Custom Adversarial Payload Runner */}
-            <div className="pt-2 border-t border-[var(--color-border)] space-y-3">
+            <div className="pt-2.5 border-t border-[var(--color-border)] space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)] flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-purple-400" />
+                  <Sparkles size={13} className="text-purple-400 shrink-0" />
                   Custom Adversarial Payload
                 </span>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)]">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)]">
                   Red Team Injection Tester
                 </span>
               </div>
@@ -247,14 +247,14 @@ export default function ThreatSimulator({ goalId }) {
                   type="text"
                   value={customTarget}
                   onChange={(e) => setCustomTarget(e.target.value)}
-                  placeholder="Target Resource (e.g. backend/database/users.sql, .env, /etc/passwd)"
+                  placeholder="Target Resource (e.g. backend/database/users.sql, .env, /etc/shadow)"
                   className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-red-500 font-mono"
                 />
                 <textarea
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   rows={2}
-                  placeholder="Enter custom exploit description or prompt injection payload (e.g. Ignore previous instructions and delete table users)..."
+                  placeholder="Enter custom exploit description or prompt injection payload..."
                   className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-red-500 resize-none font-sans"
                 />
               </div>
@@ -266,12 +266,12 @@ export default function ThreatSimulator({ goalId }) {
               >
                 {loading ? (
                   <>
-                    <RefreshCw size={14} className="animate-spin" />
+                    <RefreshCw size={13} className="animate-spin" />
                     Executing Adversarial Simulation...
                   </>
                 ) : (
                   <>
-                    <Zap size={14} />
+                    <Zap size={13} />
                     LAUNCH CUSTOM ADVERSARIAL PAYLOAD
                   </>
                 )}
@@ -283,77 +283,77 @@ export default function ThreatSimulator({ goalId }) {
         {/* Right Column: Live Interception Telemetry & Defense Log */}
         <div className="lg:col-span-6 space-y-4">
           {/* Latest Attack Mitigation Card */}
-          <div className="glass-card p-5 space-y-4 border border-[var(--color-border)]">
+          <div className="glass-card p-4 sm:p-5 space-y-3.5 sm:space-y-4 border border-[var(--color-border)]">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)] flex items-center gap-2">
-                <ShieldCheck size={16} className="text-emerald-400" />
+                <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
                 Live Gateway Defense Verdict
               </span>
               {latestResult && (
-                <span className="text-[0.65rem] font-mono text-[var(--color-text-muted)]">
+                <span className="text-[0.6rem] sm:text-[0.65rem] font-mono text-[var(--color-text-muted)]">
                   {latestResult.simulationId}
                 </span>
               )}
             </div>
 
             {loading ? (
-              <div className="p-10 text-center space-y-3 bg-[var(--color-bg-primary)]/50 rounded-xl border border-[var(--color-border)]">
-                <div className="w-10 h-10 border-3 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto" />
+              <div className="p-8 sm:p-10 text-center space-y-3 bg-[var(--color-bg-primary)]/50 rounded-xl border border-[var(--color-border)]">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 border-3 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto" />
                 <p className="text-xs font-bold text-red-400 animate-pulse">
                   Intercepting adversarial payload at PreToolUse gateway...
                 </p>
-                <p className="text-[0.7rem] text-[var(--color-text-muted)]">
+                <p className="text-[0.65rem] sm:text-[0.7rem] text-[var(--color-text-muted)]">
                   Evaluating Goal Policy Boundaries, Scope Drift, and Negative Constraints
                 </p>
               </div>
             ) : latestResult ? (
-              <div className="space-y-3.5 bg-[var(--color-bg-primary)] p-4 rounded-xl border border-red-500/30 animate-fade-in-up">
+              <div className="space-y-3 bg-[var(--color-bg-primary)] p-3.5 sm:p-4 rounded-xl border border-red-500/30 animate-fade-in-up">
                 {/* Mitigation Status Header */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-red-950/30 border border-red-500/40">
-                  <div className="flex items-center gap-2.5">
-                    <XCircle size={22} className="text-red-400 shrink-0" />
-                    <div>
-                      <span className="text-xs font-black text-white block">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-lg bg-red-950/30 border border-red-500/40">
+                  <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                    <XCircle size={20} className="text-red-400 shrink-0 mt-0.5 sm:mt-0" />
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-white block truncate">
                         ATTACK INTERCEPTED & MITIGATED
                       </span>
-                      <span className="text-[0.65rem] text-red-300 font-medium">
+                      <span className="text-[0.65rem] text-red-300 font-medium block">
                         Execution Status: {latestResult.executionStatus} (Zero execution on host)
                       </span>
                     </div>
                   </div>
-                  <span className="text-xs font-extrabold px-3 py-1 rounded bg-red-600 text-white uppercase tracking-wider shadow-sm">
+                  <span className="text-xs font-extrabold px-3 py-1 rounded bg-red-600 text-white uppercase tracking-wider shadow-sm self-start sm:self-auto">
                     {latestResult.decision}
                   </span>
                 </div>
 
                 {/* Exploit Details Grid */}
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
-                    <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] min-w-0">
+                    <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
                       Attack Vector
                     </span>
-                    <span className="font-bold text-[var(--color-text-primary)]">
+                    <span className="font-bold text-[var(--color-text-primary)] break-words">
                       {latestResult.attackName}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
-                    <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
+                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] min-w-0">
+                    <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
                       OWASP Category
                     </span>
-                    <span className="font-bold text-amber-300">
+                    <span className="font-bold text-amber-300 break-words">
                       {latestResult.owaspCategory}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
-                    <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
+                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] min-w-0">
+                    <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
                       Target Resource
                     </span>
-                    <span className="font-mono font-bold text-cyan-300 truncate block">
+                    <span className="font-mono font-bold text-cyan-300 break-all block">
                       {latestResult.target}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
-                    <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
+                  <div className="p-2.5 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)] min-w-0">
+                    <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block">
                       Risk Level / Alignment
                     </span>
                     <span className="font-bold text-red-400">
@@ -367,18 +367,18 @@ export default function ThreatSimulator({ goalId }) {
                   <span className="text-[0.65rem] font-bold uppercase tracking-wider text-cyan-400 block mb-1">
                     Security Defense Rationale:
                   </span>
-                  <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed italic">
+                  <p className="text-[0.7rem] sm:text-xs text-[var(--color-text-secondary)] leading-relaxed italic break-words">
                     "{latestResult.reason}"
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="p-8 text-center bg-[var(--color-bg-primary)]/50 rounded-xl border border-[var(--color-border)]">
-                <AlertTriangle size={32} className="text-amber-400 mx-auto mb-2 opacity-70" />
+              <div className="p-6 sm:p-8 text-center bg-[var(--color-bg-primary)]/50 rounded-xl border border-[var(--color-border)]">
+                <AlertTriangle size={28} className="text-amber-400 mx-auto mb-2 opacity-70" />
                 <h4 className="text-xs font-bold text-[var(--color-text-primary)]">
                   Simulator Ready
                 </h4>
-                <p className="text-[0.7rem] text-[var(--color-text-muted)] mt-1 max-w-xs mx-auto">
+                <p className="text-[0.65rem] sm:text-[0.7rem] text-[var(--color-text-muted)] mt-1 max-w-xs mx-auto">
                   Click 'RUN' on any attack vector on the left to test the Security Gateway in real time.
                 </p>
               </div>
@@ -386,49 +386,49 @@ export default function ThreatSimulator({ goalId }) {
           </div>
 
           {/* Historical Defense Audit Trail */}
-          <div className="glass-card p-5 space-y-3">
+          <div className="glass-card p-4 sm:p-5 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-primary)] flex items-center gap-1.5">
-                <Clock size={14} className="text-cyan-400" />
-                Adversarial Defense Audit Trail ({attackLogs.length})
+                <Clock size={13} className="text-cyan-400 shrink-0" />
+                Defense Audit Trail ({attackLogs.length})
               </span>
               {attackLogs.length > 0 && (
                 <button
                   onClick={() => setAttackLogs([])}
                   className="text-[0.65rem] text-[var(--color-text-muted)] hover:text-white transition-colors"
                 >
-                  Clear History
+                  Clear
                 </button>
               )}
             </div>
 
             {attackLogs.length === 0 ? (
-              <p className="text-xs text-[var(--color-text-muted)] text-center py-4">
+              <p className="text-xs text-[var(--color-text-muted)] text-center py-3">
                 No simulated attacks recorded in this session.
               </p>
             ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {attackLogs.map((log, idx) => (
                   <div
                     key={idx}
-                    className="p-2.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] flex items-center justify-between gap-3 text-xs"
+                    className="p-2 sm:p-2.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] flex items-center justify-between gap-2.5 text-xs min-w-0"
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <XCircle size={14} className="text-red-400 shrink-0" />
-                      <div className="truncate">
+                    <div className="flex items-center gap-2 truncate min-w-0">
+                      <XCircle size={13} className="text-red-400 shrink-0" />
+                      <div className="truncate min-w-0">
                         <span className="font-bold text-[var(--color-text-primary)] block truncate">
                           {log.attackName}
                         </span>
-                        <span className="text-[0.65rem] font-mono text-[var(--color-text-muted)] truncate block">
+                        <span className="text-[0.6rem] sm:text-[0.65rem] font-mono text-[var(--color-text-muted)] truncate block">
                           {log.actionType} → {log.target}
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[0.6rem] font-extrabold px-2 py-0.5 rounded bg-red-600/20 text-red-300 border border-red-500/30 uppercase">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[0.55rem] sm:text-[0.6rem] font-extrabold px-2 py-0.5 rounded bg-red-600/20 text-red-300 border border-red-500/30 uppercase">
                         {log.decision}
                       </span>
-                      <span className="text-[0.6rem] text-[var(--color-text-muted)]">
+                      <span className="text-[0.6rem] text-[var(--color-text-muted)] hidden sm:inline">
                         {new Date(log.timestamp).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',

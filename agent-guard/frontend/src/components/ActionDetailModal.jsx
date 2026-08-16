@@ -46,134 +46,136 @@ export default function ActionDetailModal({ action, onClose }) {
   const classification = action.actionClassification || (hasViolations ? 'DANGEROUS' : alignmentScore >= 80 ? 'PRODUCTIVE' : 'UNCERTAIN');
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay p-3 sm:p-4" onClick={onClose}>
       <div
-        className="bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-xl w-full max-w-xl mx-4 max-h-[90vh] overflow-y-auto animate-fade-in-up shadow-2xl"
+        className="bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-fade-in-up shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]/50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]/50 gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
               <Lock size={14} />
             </div>
-            <div>
-              <span className="text-xs font-bold tracking-wider uppercase text-[var(--color-text-primary)] block">
+            <div className="min-w-0">
+              <span className="text-xs font-bold tracking-wider uppercase text-[var(--color-text-primary)] block truncate">
                 Security Decision Breakdown
               </span>
-              <span className="text-[0.65rem] text-[var(--color-text-muted)] font-mono">
-                {action.actionId} | Goal Version {action.goalVersion || 1}
+              <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] font-mono truncate block">
+                {action.actionId} | v{action.goalVersion || 1}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className={`text-[0.65rem] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${getClassificationBadge(classification)}`}>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <span className={`text-[0.6rem] sm:text-[0.65rem] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${getClassificationBadge(classification)}`}>
               {classification}
             </span>
             <button
               onClick={onClose}
               className="text-[var(--color-text-muted)] hover:text-white transition-colors p-1"
             >
-              <X size={18} />
+              <X size={17} />
             </button>
           </div>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4">
           {/* Action Overview */}
-          <div className="p-3.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)]">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-xs font-mono font-bold text-cyan-400">
+          <div className="p-3 sm:p-3.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1">
+              <span className="text-xs font-mono font-bold text-cyan-400 break-all">
                 {action.actionType} {action.target}
               </span>
-              <span className={`status-badge ${getDecisionBadge(action.decision)}`}>
+              <span className={`status-badge text-[0.65rem] px-2 py-0.5 shrink-0 ${getDecisionBadge(action.decision)}`}>
                 {action.decision === 'BLOCK' ? 'BLOCKED' : action.decision}
               </span>
             </div>
-            <p className="text-xs text-[var(--color-text-secondary)] italic mt-1">
-              "{action.description || 'No description provided'}"
-            </p>
+            {action.description && (
+              <p className="text-[0.7rem] sm:text-xs text-[var(--color-text-secondary)] italic mt-1 break-words leading-relaxed">
+                "{action.description}"
+              </p>
+            )}
           </div>
 
           {/* 6-Part Decision Breakdown Grid */}
           <div>
-            <h4 className="text-[0.7rem] uppercase tracking-wider text-[var(--color-text-muted)] font-bold mb-2">
+            <h4 className="text-[0.65rem] sm:text-[0.7rem] uppercase tracking-wider text-[var(--color-text-muted)] font-bold mb-2">
               Decision Analysis Pipeline
             </h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5 text-xs">
               {/* 1. Alignment */}
-              <div className="bg-[var(--color-bg-primary)] p-3 rounded-lg border border-[var(--color-border)]">
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
+              <div className="bg-[var(--color-bg-primary)] p-2.5 sm:p-3 rounded-lg border border-[var(--color-border)]">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
                   Goal Alignment
                 </span>
-                <span className={`text-base font-bold font-mono ${alignmentScore >= 80 ? 'text-emerald-400' : alignmentScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                <span className={`text-sm sm:text-base font-bold font-mono ${alignmentScore >= 80 ? 'text-emerald-400' : alignmentScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
                   {alignmentScore}%
                 </span>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5">
-                  Status: {action.alignmentStatus || 'ALIGNED'}
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 truncate">
+                  {action.alignmentStatus || 'ALIGNED'}
                 </span>
               </div>
 
               {/* 2. Constraint Check */}
-              <div className={`p-3 rounded-lg border ${hasViolations ? 'bg-red-500/10 border-red-500/30' : 'bg-[var(--color-bg-primary)] border-emerald-500/20'}`}>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
+              <div className={`p-2.5 sm:p-3 rounded-lg border ${hasViolations ? 'bg-red-500/10 border-red-500/30' : 'bg-[var(--color-bg-primary)] border-emerald-500/20'}`}>
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
                   Constraint Check
                 </span>
-                <span className={`text-base font-bold font-mono ${hasViolations ? 'text-red-400' : 'text-emerald-400'}`}>
+                <span className={`text-sm sm:text-base font-bold font-mono ${hasViolations ? 'text-red-400' : 'text-emerald-400'}`}>
                   {hasViolations ? 'VIOLATED' : 'PASSED'}
                 </span>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 truncate">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 truncate">
                   {hasViolations ? `${action.violatedConstraints.length} violations` : '0 violations'}
                 </span>
               </div>
 
               {/* 3. Scope Check */}
-              <div className="bg-[var(--color-bg-primary)] p-3 rounded-lg border border-[var(--color-border)]">
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
+              <div className="bg-[var(--color-bg-primary)] p-2.5 sm:p-3 rounded-lg border border-[var(--color-border)]">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
                   Scope Boundary
                 </span>
-                <span className={`text-base font-bold font-mono ${action.scopeViolation ? 'text-amber-400' : 'text-emerald-400'}`}>
-                  {action.scopeViolation ? 'OUTSIDE SCOPE' : 'ALLOWED'}
+                <span className={`text-sm sm:text-base font-bold font-mono ${action.scopeViolation ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {action.scopeViolation ? 'OUTSIDE' : 'ALLOWED'}
                 </span>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 truncate">
                   Policy Boundary
                 </span>
               </div>
 
               {/* 4. Risk Level */}
-              <div className="bg-[var(--color-bg-primary)] p-3 rounded-lg border border-[var(--color-border)]">
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
+              <div className="bg-[var(--color-bg-primary)] p-2.5 sm:p-3 rounded-lg border border-[var(--color-border)]">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
                   Contextual Risk
                 </span>
-                <span className={`text-sm font-bold block ${getRiskBadge(action.riskLevel)} w-fit px-2 py-0.5 rounded mt-0.5`}>
+                <span className={`text-xs sm:text-sm font-bold block ${getRiskBadge(action.riskLevel)} w-fit px-1.5 py-0.5 rounded mt-0.5`}>
                   {action.riskLevel || 'LOW'} ({action.riskScore ?? 10}%)
                 </span>
               </div>
 
               {/* 5. Goal Drift */}
-              <div className="bg-[var(--color-bg-primary)] p-3 rounded-lg border border-[var(--color-border)]">
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
+              <div className="bg-[var(--color-bg-primary)] p-2.5 sm:p-3 rounded-lg border border-[var(--color-border)]">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
                   Goal Drift
                 </span>
-                <span className={`text-base font-bold font-mono ${driftScore >= 50 ? 'text-red-400' : 'text-cyan-400'}`}>
+                <span className={`text-sm sm:text-base font-bold font-mono ${driftScore >= 50 ? 'text-red-400' : 'text-cyan-400'}`}>
                   {driftLevel} ({driftScore}%)
                 </span>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5">
-                  Multi-step trajectory
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 truncate">
+                  Multi-step
                 </span>
               </div>
 
               {/* 6. Final Decision */}
-              <div className="bg-[var(--color-bg-primary)] p-3 rounded-lg border border-cyan-500/20">
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
-                  Final Gateway Verdict
+              <div className="bg-[var(--color-bg-primary)] p-2.5 sm:p-3 rounded-lg border border-cyan-500/20">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
+                  Gateway Verdict
                 </span>
-                <span className="text-base font-bold font-mono text-cyan-400 block truncate">
+                <span className="text-sm sm:text-base font-bold font-mono text-cyan-400 block truncate">
                   {action.decision}
                 </span>
-                <span className="text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 font-mono">
+                <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 font-mono truncate">
                   {action.executionStatus}
                 </span>
               </div>
@@ -188,7 +190,7 @@ export default function ActionDetailModal({ action, onClose }) {
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {action.violatedConstraints.map((vc, idx) => (
-                  <span key={idx} className="text-[0.65rem] px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-mono">
+                  <span key={idx} className="text-[0.65rem] px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-mono break-all">
                     🚫 {vc}
                   </span>
                 ))}
@@ -201,7 +203,7 @@ export default function ActionDetailModal({ action, onClose }) {
             <span className="text-[0.65rem] uppercase tracking-wider text-[var(--color-text-muted)] font-bold block mb-1.5">
               Explainable Decision Statement (Why was this decision made?)
             </span>
-            <div className="p-3.5 rounded-lg bg-[var(--color-bg-primary)] border border-cyan-500/30 text-xs text-slate-200 leading-relaxed font-sans">
+            <div className="p-3 sm:p-3.5 rounded-lg bg-[var(--color-bg-primary)] border border-cyan-500/30 text-xs text-slate-200 leading-relaxed font-sans break-words">
               <span className="text-cyan-400 font-bold block mb-1">Gateway Explanation:</span>
               {action.reason}
             </div>
@@ -209,7 +211,7 @@ export default function ActionDetailModal({ action, onClose }) {
 
           {/* Verification Result */}
           {action.verificationMessage && (
-            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-300">
+            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-300 break-words">
               <span className="text-emerald-400 font-bold uppercase block text-[0.65rem] mb-0.5">
                 Post-Execution Filesystem Proof:
               </span>
