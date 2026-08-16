@@ -3,7 +3,7 @@
 
 /* ─── Theme Tokens ──────────────────────────────────────────── */
 
-@theme {
+:root {
   --color-bg-primary: #0a0e1a;
   --color-bg-secondary: #111827;
   --color-bg-card: #1a1f2e;
@@ -31,6 +31,59 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+[data-theme="light"], .light {
+  --color-bg-primary: #f1f5f9;
+  --color-bg-secondary: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-card-hover: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-border-light: #cbd5e1;
+
+  --color-accent-blue: #2563eb;
+  --color-accent-cyan: #0891b2;
+  --color-accent-emerald: #059669;
+  --color-accent-amber: #d97706;
+  --color-accent-red: #dc2626;
+  --color-accent-purple: #7c3aed;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+
+  --color-status-allow: #059669;
+  --color-status-pending: #d97706;
+  --color-status-block: #dc2626;
+  --color-status-approved: #0891b2;
+}
+
+@theme {
+  --color-bg-primary: var(--color-bg-primary);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-bg-card: var(--color-bg-card);
+  --color-bg-card-hover: var(--color-bg-card-hover);
+  --color-border: var(--color-border);
+  --color-border-light: var(--color-border-light);
+
+  --color-accent-blue: var(--color-accent-blue);
+  --color-accent-cyan: var(--color-accent-cyan);
+  --color-accent-emerald: var(--color-accent-emerald);
+  --color-accent-amber: var(--color-accent-amber);
+  --color-accent-red: var(--color-accent-red);
+  --color-accent-purple: var(--color-accent-purple);
+
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+
+  --color-status-allow: var(--color-status-allow);
+  --color-status-pending: var(--color-status-pending);
+  --color-status-block: var(--color-status-block);
+  --color-status-approved: var(--color-status-approved);
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
 /* ─── Base Styles ───────────────────────────────────────────── */
 
 body {
@@ -40,6 +93,7 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────── */
@@ -127,12 +181,29 @@ body {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   backdrop-filter: blur(12px);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.25s ease;
+}
+
+[data-theme="light"] .glass-card,
+.light .glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(248, 250, 252, 0.98) 100%
+  );
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
 .glass-card:hover {
   border-color: var(--color-border-light);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .glass-card:hover,
+.light .glass-card:hover {
+  border-color: var(--color-border-light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
 }
 
 /* ─── Score Ring ─────────────────────────────────────────────── */

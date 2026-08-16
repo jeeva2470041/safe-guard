@@ -1,8 +1,9 @@
 import { Shield, Plus, Radio } from 'lucide-react';
 import GuardModeToggle from './GuardModeToggle';
+import ThemeToggle from './ThemeToggle';
 
 /**
- * Header — AGENT GUARD branding with agent status indicator, Guard Mode Toggle, and Connect IDE button.
+ * Header — AGENT GUARD branding with agent status indicator, Guard Mode Toggle, Dark/Light Theme Toggle, and Connect IDE button.
  */
 export default function Header({ agentStatus = 'IDLE', onReset, sessionStatus, onOpenConnectModal, onGuardModeChange }) {
   const statusConfig = {
@@ -22,7 +23,7 @@ export default function Header({ agentStatus = 'IDLE', onReset, sessionStatus, o
   const isAgentConnected = Boolean(sessionStatus?.connected);
 
   return (
-    <header className="border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]/80 backdrop-blur-md sticky top-0 z-40">
+    <header className="border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)]/80 backdrop-blur-md sticky top-0 z-40 transition-colors duration-200">
       <div className="max-w-[1440px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
         {/* Logo & Title */}
         <div className="flex items-center gap-3">
@@ -39,8 +40,11 @@ export default function Header({ agentStatus = 'IDLE', onReset, sessionStatus, o
           </div>
         </div>
 
-        {/* Right Section: Mode Toggle + Connected Agent Badge + Connect IDE button + System Status + Reset */}
+        {/* Right Section: Theme Toggle + Mode Toggle + Connected Agent Badge + Connect IDE button + System Status + Reset */}
         <div className="flex items-center gap-3">
+          {/* Dark / Light Mode Toggle Button */}
+          <ThemeToggle />
+
           {/* Interactive Guard Mode Toggle */}
           <GuardModeToggle onChange={onGuardModeChange} />
           {/* Connected Agent Quick Badge */}
