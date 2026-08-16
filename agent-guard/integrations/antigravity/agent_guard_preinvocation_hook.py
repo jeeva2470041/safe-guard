@@ -27,6 +27,8 @@ def extract_prompt_from_transcript(transcript_path: str, conversation_id: str = 
     if conversation_id:
         user_home = os.path.expanduser("~")
         candidate_paths.append(os.path.join(user_home, ".gemini", "antigravity-ide", "brain", conversation_id, ".system_generated", "logs", "transcript.jsonl"))
+        candidate_paths.append(os.path.join(user_home, ".gemini", "antigravity", "brain", conversation_id, ".system_generated", "logs", "transcript.jsonl"))
+        candidate_paths.append(os.path.join(user_home, ".gemini", "antigravity-cli", "brain", conversation_id, ".system_generated", "logs", "transcript.jsonl"))
 
     for path in candidate_paths:
         if not path or not os.path.exists(path):

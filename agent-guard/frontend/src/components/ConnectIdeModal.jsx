@@ -87,10 +87,24 @@ export default function ConnectIdeModal({ isOpen, onClose, initialStatus, onStat
     setDisconnecting(true);
     setError(null);
     try {
-      await disconnectAgent(status?.activeSessionId, status?.activeConversationId);
-      const updated = await getAgentStatus();
-      setStatus(updated);
-      if (onStatusChange) onStatusChange(updated);
+      const updated = await disconnectAgent(status?.activeSessionId, status?.activeConversationId);
+      const newStatus = (updated && updated.connected !== undefined) ? updated : {
+        connected: false,
+        agent: 'antigravity',
+        status: 'NOT_CONNECTED',
+        activeSessionId: null,
+        activeConversationId: null,
+        activeGoalId: null,
+        userGoal: null,
+        workspace: null,
+        lastAction: null,
+        interceptedCount: status?.interceptedCount || 0,
+        allowedCount: 0,
+        blockedCount: 0,
+        approvalCount: 0,
+      };
+      setStatus(newStatus);
+      if (onStatusChange) onStatusChange(newStatus);
       setConfirmDisconnect(false);
     } catch (err) {
       setError(err?.response?.data?.detail || err?.message || 'Failed to disconnect session.');

@@ -367,22 +367,15 @@ async def disconnect_antigravity_session(session_id: Optional[str] = None, conve
     db = get_database()
     now_iso = datetime.now(timezone.utc).isoformat()
     
-    query = {"agent": "antigravity", "status": "ACTIVE"}
-    if session_id or conversation_id:
-        target_id = session_id or conversation_id
-        query["$or"] = [{"sessionId": target_id}, {"conversationId": target_id}]
-
+    # When disconnecting the IDE connection, mark all active sessions as DISCONNECTED
     result = await db.agent_sessions.update_many(
-        query,
+        {"status": "ACTIVE"},
         {"$set": {"status": "DISCONNECTED", "disconnectedAt": now_iso}}
     )
     
     logger.info(f"[SESSION DISCONNECT] Disconnected {result.modified_count} active Antigravity sessions")
-    return {
-        "status": "disconnected",
-        "modifiedCount": result.modified_count,
-        "disconnectedAt": now_iso
-    }
+    return await get_antigravity_connection_status()
+
 
 
 async def get_antigravity_connection_status() -> Dict[str, Any]:

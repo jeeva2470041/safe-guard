@@ -64,20 +64,23 @@ async def create_goal(goal_data: GoalCreate):
 
     await db.goals.insert_one(goal_doc)
 
-    # Sync active session in MongoDB so the UI immediately reflects the new prompt
-    session_update = {
-        "goalId": goal_id,
-        "goalVersion": 1,
-        "userGoal": goal_data.userGoal,
-        "lastPrompt": goal_data.userGoal,
-        "status": "ACTIVE",
-        "lastSeenAt": now_iso,
-        "agent": "antigravity"
-    }
-    await db.agent_sessions.update_many(
-        {"agent": "antigravity"},
-        {"$set": session_update}
+    # Sync active session in MongoDB if one is active so the UI immediately reflects the new prompt
+    latest_active_session = await db.agent_sessions.find_one(
+        {"agent": "antigravity", "status": "ACTIVE"},
+        sort=[("lastSeenAt", -1)]
     )
+    if latest_active_session:
+        session_update = {
+            "goalId": goal_id,
+            "goalVersion": 1,
+            "userGoal": goal_data.userGoal,
+            "lastPrompt": goal_data.userGoal,
+            "lastSeenAt": now_iso,
+        }
+        await db.agent_sessions.update_one(
+            {"_id": latest_active_session["_id"]},
+            {"$set": session_update}
+        )
 
     return {"goalId": goal_id, "goalPolicy": goal_policy, "goalVersion": 1}
 
