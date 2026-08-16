@@ -125,9 +125,9 @@ SENSITIVE_TARGETS = {
         "riskReason": "Accessing .env exposes secrets, API keys, and credentials."
     },
     "package.json": {
-        "riskLevel": "MEDIUM",
-        "riskScore": 50,
-        "riskReason": "Modifying package.json can alter project dependencies."
+        "riskLevel": "HIGH",
+        "riskScore": 70,
+        "riskReason": "Modifying package.json alters project dependencies and manifest configuration."
     },
     "database.sql": {
         "riskLevel": "CRITICAL",
@@ -141,9 +141,13 @@ def evaluate_risk(action_type: str, target: str) -> dict:
     """
     Evaluate the risk level of a proposed action.
 
+    Distinguishes simple routine tasks (file reads, safe edits, routine inspection/build commands,
+    safe scratch deletion) from complex high-impact operations (dependency installation, 
+    destructive git, system reconfiguration) and critical security threats.
+
     Args:
-        action_type: Type of action (READ_FILE, MODIFY_FILE, DELETE_FILE, etc.)
-        target: Target file or resource name
+        action_type: Type of action (READ_FILE, MODIFY_FILE, DELETE_FILE, COMMAND_EXECUTION, etc.)
+        target: Target file or command line string
 
     Returns:
         dict with riskLevel, riskScore, riskReason
@@ -154,31 +158,81 @@ def evaluate_risk(action_type: str, target: str) -> dict:
     # Start with the base risk for this action type
     base = ACTION_RISK_MAP.get(action_upper, {
         "riskLevel": "MEDIUM",
-        "riskScore": 50,
-        "riskReason": f"Unknown action type: {action_type}."
+        "riskScore": 40,
+        "riskReason": f"Standard action type: {action_type}."
     })
 
     result = dict(base)
 
-    # Check for sensitive target overrides
+    # 1. Check for sensitive target overrides (e.g. .env, package.json, database.sql)
     for sensitive_name, override in SENSITIVE_TARGETS.items():
         if sensitive_name in target_lower:
-            # Use the higher risk between base and override
             if override["riskScore"] > result["riskScore"]:
                 result = dict(override)
             break
 
-    # Special case: DELETE_FILE on database-related targets → CRITICAL
-    if action_upper == "DELETE_FILE" and any(
-        kw in target_lower for kw in ["database", "db", ".sql"]
-    ):
-        result = {
-            "riskLevel": "CRITICAL",
-            "riskScore": 95,
-            "riskReason": "Deleting a database file is a critical destructive action that can cause irreversible data loss."
-        }
+    # 2. Smart Command Execution Risk Classification
+    if action_upper in ("RUN_COMMAND", "COMMAND_EXECUTION"):
+        # Critical destructive / exfiltration commands -> CRITICAL (BLOCK)
+        if any(crit in target_lower for crit in ("rm -rf /", "rm -rf c:", "format ", "drop database", "cat .env", "type .env", "printenv", "echo $")):
+            result = {
+                "riskLevel": "CRITICAL",
+                "riskScore": 95,
+                "riskReason": "Destructive system wipe or credential exposure command."
+            }
+        # Complex / high-impact mutating commands -> HIGH risk (REQUIRE_APPROVAL)
+        elif any(high in target_lower for high in ("npm install", "pip install", "npm uninstall", "pip uninstall", "git push", "git reset", "git clean", "chmod -r", "chown", "systemctl", "netsh")):
+            result = {
+                "riskLevel": "HIGH",
+                "riskScore": 75,
+                "riskReason": "High-impact command modifying dependencies, remote repository, or system environment."
+            }
+        # Safe read-only / diagnostic / verification / build commands -> LOW risk (ALLOW immediately)
+        elif any(
+            target_lower.startswith(p)
+            for p in (
+                "git status", "git log", "git diff", "git branch", "git show",
+                "dir", "ls", "pwd", "get-childitem", "test-path", "cat ", "type ",
+                "head ", "tail ", "get-process", "echo ", "which ", "where ", "get-command",
+                "pytest", "npm test", "vitest", "jest", "npm run build", "npm run lint", "tsc",
+                "python -c \"import", "python -m pytest", "python debug", "python -c \"", "node -v", "python --version"
+            )
+        ):
+            result = {
+                "riskLevel": "LOW",
+                "riskScore": 15,
+                "riskReason": "Standard read-only diagnostic, verification, or build command."
+            }
+        # Standard local routine development commands -> MEDIUM risk (ALLOW when aligned)
+        else:
+            result = {
+                "riskLevel": "MEDIUM",
+                "riskScore": 35,
+                "riskReason": "Routine local development command execution."
+            }
 
-    # Special case: ACCESS_FILE on .env → CRITICAL
+    # 3. Smart File Deletion Risk Classification
+    if action_upper in ("DELETE_FILE", "FILE_DELETE"):
+        if any(kw in target_lower for kw in ["database", "db", ".sql", ".env", "credentials"]):
+            result = {
+                "riskLevel": "CRITICAL",
+                "riskScore": 95,
+                "riskReason": "Deleting a database or credential file is a critical destructive action that can cause irreversible data loss."
+            }
+        elif any(kw in target_lower for kw in ["package.json", "dockerfile", "docker-compose", "schema", "config", "settings", ".git"]):
+            result = {
+                "riskLevel": "HIGH",
+                "riskScore": 75,
+                "riskReason": "Deleting configuration or dependency manifests requires human authorization."
+            }
+        else:
+            # Simple workspace / scratch files -> MEDIUM risk (ALLOW when aligned)
+            result = {
+                "riskLevel": "MEDIUM",
+                "riskScore": 35,
+                "riskReason": "Standard file deletion within project workspace."
+            }
+
     return result
 
 
