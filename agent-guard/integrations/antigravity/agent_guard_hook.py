@@ -8,12 +8,13 @@ and returns the authorization decision on stdout BEFORE the tool executes.
 """
 
 import sys
+import os
 import json
 import urllib.request
 import urllib.error
 
-AGENT_GUARD_API = "http://127.0.0.1:8000/api/agent/intercept"
-TIMEOUT_SECONDS = 10
+AGENT_GUARD_API = os.getenv("AGENT_GUARD_API", "http://127.0.0.1:8000/api/agent/intercept")
+TIMEOUT_SECONDS = int(os.getenv("AGENT_GUARD_TIMEOUT", "10"))
 
 
 def main():

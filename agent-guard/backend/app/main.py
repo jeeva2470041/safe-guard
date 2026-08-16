@@ -30,10 +30,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration — allow the Vite dev server
+import os
+
+# CORS configuration — explicitly allow Vercel domains, localhost, and custom origins
+default_allowed_origins = [
+    "https://safe-agent-guard.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+cors_origins_env = os.getenv("CORS_ORIGINS", "")
+if cors_origins_env and cors_origins_env != "*":
+    for origin in cors_origins_env.split(","):
+        clean_origin = origin.strip()
+        if clean_origin and clean_origin not in default_allowed_origins:
+            default_allowed_origins.append(clean_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=default_allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

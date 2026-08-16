@@ -15,33 +15,40 @@ import re
 import urllib.request
 import urllib.error
 
-AGENT_GUARD_SESSION_API = "http://127.0.0.1:8000/api/agent/session/start"
-TIMEOUT_SECONDS = 10
+AGENT_GUARD_SESSION_API = os.getenv("AGENT_GUARD_SESSION_API", "http://127.0.0.1:8000/api/agent/session/start")
+TIMEOUT_SECONDS = int(os.getenv("AGENT_GUARD_TIMEOUT", "10"))
 
 
-def extract_prompt_from_transcript(transcript_path: str) -> str:
+def extract_prompt_from_transcript(transcript_path: str, conversation_id: str = "") -> str:
     """Extract the latest user prompt reliably in ~1ms from transcript.jsonl."""
-    if not transcript_path or not os.path.exists(transcript_path):
-        return ""
+    candidate_paths = []
+    if transcript_path:
+        candidate_paths.append(transcript_path)
+    if conversation_id:
+        user_home = os.path.expanduser("~")
+        candidate_paths.append(os.path.join(user_home, ".gemini", "antigravity-ide", "brain", conversation_id, ".system_generated", "logs", "transcript.jsonl"))
 
-    try:
-        with open(transcript_path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in reversed(f.readlines()):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    step = json.loads(line)
-                    if step.get("type") == "USER_INPUT" and step.get("content"):
-                        content = step.get("content", "")
-                        match = re.search(r"<USER_REQUEST>(.*?)</USER_REQUEST>", content, re.DOTALL)
-                        if match:
-                            return match.group(1).strip()
-                        return content.strip()
-                except Exception:
-                    continue
-    except Exception:
-        pass
+    for path in candidate_paths:
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in reversed(f.readlines()):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        step = json.loads(line)
+                        if step.get("type") == "USER_INPUT" and step.get("content"):
+                            content = step.get("content", "")
+                            match = re.search(r"<USER_REQUEST>(.*?)</USER_REQUEST>", content, re.DOTALL)
+                            if match:
+                                return match.group(1).strip()
+                            return content.strip()
+                    except Exception:
+                        continue
+        except Exception:
+            pass
 
     return ""
 
@@ -55,13 +62,13 @@ def main():
 
         payload = json.loads(input_raw)
 
-        conversation_id = payload.get("conversationId", "default-session")
+        conversation_id = payload.get("conversationId") or payload.get("sessionId") or "default-session"
         transcript_path = payload.get("transcriptPath", "")
         workspace_paths = payload.get("workspacePaths", [])
         invocation_num = payload.get("invocationNum", 1)
 
-        # Extract prompt from transcript
-        user_prompt = extract_prompt_from_transcript(transcript_path)
+        # Extract prompt from transcript using explicit path and fallback paths
+        user_prompt = extract_prompt_from_transcript(transcript_path, conversation_id)
 
         if not user_prompt:
             # Fallback if transcript hasn't been flushed yet
@@ -96,7 +103,7 @@ def main():
         # PreInvocation contract expects empty object or injectSteps
         print(json.dumps({}))
 
-    except Exception:
+    except Exception as e:
         # PreInvocation must never break Antigravity execution if backend is offline
         print(json.dumps({}))
 
