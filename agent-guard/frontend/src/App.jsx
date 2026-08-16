@@ -10,7 +10,6 @@ import { usePolling } from './hooks/usePolling';
  */
 export default function App() {
   const [currentGoalId, setCurrentGoalId] = useState(null);
-  const [manualOverride, setManualOverride] = useState(false);
 
   // Poll for active Antigravity session
   const { data: sessionStatus } = usePolling(
@@ -29,7 +28,6 @@ export default function App() {
   }, [sessionStatus?.activeGoalId, sessionStatus?.connected, currentGoalId]);
 
   const handleStart = async (userGoal, constraints, isDemo = false, scenarioId = null, goalPolicy = null, monitorMode = false) => {
-    setManualOverride(true);
     if (scenarioId) {
       const res = await startScenarioDemo(scenarioId);
       setCurrentGoalId(res.goalId);
@@ -50,7 +48,6 @@ export default function App() {
 
   const handleReset = () => {
     setCurrentGoalId(null);
-    setManualOverride(false);
   };
 
   if (currentGoalId) {

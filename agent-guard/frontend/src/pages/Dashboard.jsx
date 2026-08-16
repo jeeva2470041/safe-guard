@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import Header from '../components/Header';
 import GoalCard from '../components/GoalCard';
 import GoalIntegrityCard from '../components/GoalIntegrityCard';
@@ -33,7 +33,6 @@ import {
 export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChange }) {
   const [selectedAction, setSelectedAction] = useState(null);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
-  const activityTimelineRef = useRef(null);
 
   // Poll agent status specifically for dashboard
   const { data: liveAgentStatus } = usePolling(

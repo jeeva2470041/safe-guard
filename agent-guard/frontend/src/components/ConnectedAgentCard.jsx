@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radio, Plus, PowerOff, ShieldCheck, ShieldAlert, AlertTriangle, FileCode, CheckCircle2, XCircle, ArrowRight, Loader2, FolderRoot } from 'lucide-react';
+import { Radio, Plus, PowerOff, FileCode, ArrowRight, Loader2, FolderRoot } from 'lucide-react';
 import { disconnectAgent } from '../services/api';
 
 /**

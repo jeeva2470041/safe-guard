@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, Plus, X, Lock, ChevronRight, Cpu, Layers, Radio, Zap } from 'lucide-react';
+import { Shield, ChevronRight, Cpu, Layers, Radio, Zap, Sparkles } from 'lucide-react';
 import Header from '../components/Header';
 import ConnectedAgentCard from '../components/ConnectedAgentCard';
 import ConnectIdeModal from '../components/ConnectIdeModal';
@@ -7,39 +7,20 @@ import { analyzeGoal } from '../services/api';
 
 /**
  * GoalSetup — Home / Setup page for Agent Guard.
- * Features prominent [+ CONNECT IDE] integration and dynamic policy formulation.
+ * Single unified prompt entry with dynamic security policy synthesis and PreToolUse authorization.
  */
 export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
-  const [userGoal, setUserGoal] = useState(
-    'Create a portfolio website using React with a dark theme. Do not modify the backend.'
-  );
-  const [constraints, setConstraints] = useState([
-    'Do not modify backend',
-    'Do not access secrets',
-  ]);
-  const [newConstraint, setNewConstraint] = useState('');
+  const [userGoal, setUserGoal] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [goalPolicy, setGoalPolicy] = useState(null);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
 
-  const addConstraint = () => {
-    const trimmed = newConstraint.trim();
-    if (trimmed && !constraints.includes(trimmed)) {
-      setConstraints([...constraints, trimmed]);
-      setNewConstraint('');
-    }
-  };
-
-  const removeConstraint = (idx) => {
-    setConstraints(constraints.filter((_, i) => i !== idx));
-  };
-
   const handleAnalyze = async () => {
     if (!userGoal.trim()) return;
     setAnalyzing(true);
     try {
-      const res = await analyzeGoal(userGoal, constraints);
+      const res = await analyzeGoal(userGoal.trim(), []);
       setGoalPolicy(res.goalPolicy);
     } catch (err) {
       console.error('Goal analysis failed:', err);
@@ -49,18 +30,20 @@ export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
   };
 
   const handleAcceptAndStart = async () => {
+    if (!userGoal.trim()) return;
     setLoading(true);
     try {
-      await onStart(userGoal, constraints, false, null, goalPolicy, false);
+      await onStart(userGoal.trim(), [], false, null, goalPolicy, false);
     } finally {
       setLoading(false);
     }
   };
 
   const handleAcceptAndMonitor = async () => {
+    if (!userGoal.trim()) return;
     setLoading(true);
     try {
-      await onStart(userGoal, constraints, false, null, goalPolicy, true);
+      await onStart(userGoal.trim(), [], false, null, goalPolicy, true);
     } finally {
       setLoading(false);
     }
@@ -96,66 +79,30 @@ export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
             onStatusChange={onStatusChange}
           />
 
-          {/* Form Card */}
+          {/* Prompt Entry Card */}
           <div className="glass-card p-6 space-y-5">
-
-            {/* Goal Input */}
+            {/* Prompt Input */}
             <div>
-              <label className="text-[0.7rem] uppercase tracking-wider text-[var(--color-text-muted)] font-semibold mb-2 block">
-                User Natural-Language Goal
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[0.75rem] uppercase tracking-wider text-[var(--color-text-primary)] font-semibold flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-blue-400" />
+                  Enter the Prompt
+                </label>
+                <span className="text-[0.65rem] text-[var(--color-text-muted)]">
+                  Natural language goal & security instructions
+                </span>
+              </div>
               <textarea
                 value={userGoal}
                 onChange={(e) => {
                   setUserGoal(e.target.value);
                   setGoalPolicy(null);
                 }}
-                rows={3}
-                className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-none transition-colors font-sans"
-                placeholder="Describe what the AI agent should accomplish..."
+                rows={4}
+                className="w-full bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-none transition-all font-sans leading-relaxed shadow-inner"
+                placeholder="Enter the prompt for the AI agent (e.g., Create a portfolio website using React with a dark theme. Do not modify the backend)..."
+                autoFocus
               />
-            </div>
-
-            {/* Constraints */}
-            <div>
-              <label className="text-[0.7rem] uppercase tracking-wider text-[var(--color-text-muted)] font-semibold mb-2 block">
-                Explicit Constraints
-              </label>
-
-              <div className="flex flex-wrap gap-2 mb-3">
-                {constraints.map((c, i) => (
-                  <span
-                    key={i}
-                    className="flex items-center gap-1.5 text-[0.7rem] px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                  >
-                    <Lock size={11} />
-                    {c}
-                    <button
-                      onClick={() => removeConstraint(i)}
-                      className="ml-1 text-amber-400/60 hover:text-amber-300 transition-colors"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newConstraint}
-                  onChange={(e) => setNewConstraint(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addConstraint()}
-                  className="flex-1 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-xs text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-blue-500 transition-colors"
-                  placeholder="Add a constraint..."
-                />
-                <button
-                  onClick={addConstraint}
-                  className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-blue-500 hover:text-blue-400 transition-colors"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
             </div>
 
             {/* Action Buttons before policy generation */}
@@ -287,7 +234,7 @@ export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
                       onClick={() => setGoalPolicy(null)}
                       className="btn-secondary py-2.5 text-xs text-[var(--color-text-muted)]"
                     >
-                      EDIT GOAL
+                      EDIT PROMPT
                     </button>
                   </div>
                 </div>
@@ -311,4 +258,3 @@ export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
     </div>
   );
 }
-

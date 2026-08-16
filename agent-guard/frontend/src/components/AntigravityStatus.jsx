@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { Radio, Wifi, WifiOff, Clock, Activity, Hash } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
 import { getAgentStatus } from '../services/api';

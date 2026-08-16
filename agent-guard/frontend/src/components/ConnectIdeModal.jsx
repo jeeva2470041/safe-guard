@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Shield, Radio, CheckCircle2, AlertTriangle, Loader2, Sparkles, X, Terminal, ExternalLink, PowerOff } from 'lucide-react';
+import { Shield, Radio, AlertTriangle, Loader2, Sparkles, X, Terminal, PowerOff } from 'lucide-react';
 import { getAgentStatus, disconnectAgent, connectAgent } from '../services/api';
 
 /**
