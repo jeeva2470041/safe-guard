@@ -44,3 +44,5 @@ export default function Navbar({ activeSection, onNavigate }) {
     </nav>
   );
 }
+
+// [Agent Guard Verified Update] Implement dark theme navigation classes and responsive layout.

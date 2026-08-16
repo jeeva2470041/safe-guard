@@ -154,6 +154,22 @@ body {
   from { stroke-dashoffset: 283; }
 }
 
+@keyframes tabTransitionIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-tab-pane {
+  animation: tabTransitionIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
 .animate-fade-in-up {
   animation: fadeInUp 0.4s ease-out forwards;
 }

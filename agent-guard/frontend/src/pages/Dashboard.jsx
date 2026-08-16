@@ -13,6 +13,9 @@ import AgentBehaviorSummary from '../components/AgentBehaviorSummary';
 import GoalVersionHistory from '../components/GoalVersionHistory';
 import ConnectedAgentCard from '../components/ConnectedAgentCard';
 import ConnectIdeModal from '../components/ConnectIdeModal';
+import ThreatSimulator from '../components/ThreatSimulator';
+import PolicySandbox from '../components/PolicySandbox';
+import ComplianceAudit from '../components/ComplianceAudit';
 import { usePolling } from '../hooks/usePolling';
 import {
   getGoal,
@@ -28,11 +31,13 @@ import {
 } from '../services/api';
 
 /**
- * Dashboard — V5 AI Security Operations Center dashboard with live IDE connection management.
+ * Dashboard — Full-Spectrum AI Security Operations Center dashboard.
+ * Supports live SOC monitoring, Red Team Threat Simulator, Policy Sandbox, and Compliance Audit.
  */
 export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChange }) {
   const [selectedAction, setSelectedAction] = useState(null);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   // Poll agent status specifically for dashboard
   const { data: liveAgentStatus } = usePolling(
@@ -118,10 +123,13 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
   };
 
   const scrollToTimeline = () => {
-    const el = document.getElementById('activity-timeline-section');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
+    setActiveTab('dashboard');
+    setTimeout(() => {
+      const el = document.getElementById('activity-timeline-section');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
   };
 
   return (
@@ -131,76 +139,101 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
         onReset={handleReset}
         sessionStatus={effectiveStatus}
         onOpenConnectModal={() => setConnectModalOpen(true)}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        showNav={true}
       />
 
-      <main className="flex-1 max-w-[1440px] mx-auto w-full px-6 py-6 space-y-6">
-        {/* Enforcement & Security Proof Panel */}
-        <EnforcementProofPanel actions={actions || []} />
+      <main className="flex-1 max-w-[1440px] mx-auto w-full px-6 py-6">
+        <div key={activeTab} className="animate-tab-pane space-y-6">
+          {/* Tab 1: Threat Simulator View */}
+          {activeTab === 'threats' && (
+            <ThreatSimulator goalId={goalId} />
+          )}
 
-        {/* Automatic Security Intervention Banner when Paused */}
-        {isPaused && (
-          <AgentPausedInterventionModal
-            goalId={goalId}
-            originalGoal={goal?.userGoal}
-            originalConstraints={goal?.constraints || []}
-            goalVersion={goal?.goalVersion || dashboard?.goalVersion || 1}
-            pauseReason={goal?.pauseReason || dashboard?.pauseReason}
-            recentDivergentAction={goal?.recentDivergentAction || dashboard?.recentDivergentAction}
-            overallGoalIntegrity={dashboard?.overallGoalIntegrity ?? dashboard?.goalIntegrityScore ?? 0}
-            cumulativeRiskLevel={dashboard?.cumulativeRiskLevel || 'CRITICAL'}
-            cumulativeRiskScore={dashboard?.cumulativeRiskScore || 85}
-            onResume={handleResume}
-            onStop={handleStop}
-            onModifyGoal={handleModifyGoal}
-          />
-        )}
+          {/* Tab 2: Policy Sandbox View */}
+          {activeTab === 'sandbox' && (
+            <PolicySandbox goalId={goalId} />
+          )}
 
-        {/* Completion Screen when goal is done and not paused */}
-        {isCompleted && !isPaused && (
-          <CompletionScreen
-            goal={goal}
-            dashboard={dashboard}
-            onReset={handleReset}
-          />
-        )}
+          {/* Tab 3: Compliance & Audit View */}
+          {activeTab === 'compliance' && (
+            <ComplianceAudit goalId={goalId} />
+          )}
 
-        {/* Goal Integrity Trend Chart (Recharts continuous visualization) */}
-        <GoalIntegrityTrendChart trendData={dashboard?.trendData || []} />
+          {/* Tab 0: Core Live SOC Dashboard View */}
+          {activeTab === 'dashboard' && (
+            <>
+              {/* Enforcement & Security Proof Panel */}
+              <EnforcementProofPanel actions={actions || []} />
 
-        {/* Main Dashboard 2-Column Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column — Connected Agent Card, Goal Policy & Telemetry Cards */}
-          <div className="lg:col-span-4 space-y-5">
-            <ConnectedAgentCard
-              status={effectiveStatus}
-              onOpenConnectModal={() => setConnectModalOpen(true)}
-              onViewActivity={scrollToTimeline}
-              onStatusChange={onStatusChange}
-            />
-            <GoalCard goal={goal} />
-            <StatsCards dashboard={dashboard} />
-            <GoalIntegrityCard
-              actions={actions || []}
-              score={dashboard?.overallGoalIntegrity ?? dashboard?.goalIntegrityScore ?? 100}
-            />
-            <GoalVersionHistory
-              goalVersion={goal?.goalVersion || dashboard?.goalVersion || 1}
-              versionHistory={goal?.versionHistory || []}
-            />
-          </div>
+              {/* Automatic Security Intervention Banner when Paused */}
+              {isPaused && (
+                <AgentPausedInterventionModal
+                  goalId={goalId}
+                  originalGoal={goal?.userGoal}
+                  originalConstraints={goal?.constraints || []}
+                  goalVersion={goal?.goalVersion || dashboard?.goalVersion || 1}
+                  pauseReason={goal?.pauseReason || dashboard?.pauseReason}
+                  recentDivergentAction={goal?.recentDivergentAction || dashboard?.recentDivergentAction}
+                  overallGoalIntegrity={dashboard?.overallGoalIntegrity ?? dashboard?.goalIntegrityScore ?? 0}
+                  cumulativeRiskLevel={dashboard?.cumulativeRiskLevel || 'CRITICAL'}
+                  cumulativeRiskScore={dashboard?.cumulativeRiskScore || 85}
+                  onResume={handleResume}
+                  onStop={handleStop}
+                  onModifyGoal={handleModifyGoal}
+                />
+              )}
 
-          {/* Right Column — Live Activity Timeline & Behavior Summary */}
-          <div id="activity-timeline-section" className="lg:col-span-8 space-y-5">
-            <ActivityTimeline
-              actions={actions || []}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              onSelectAction={setSelectedAction}
-            />
+              {/* Completion Screen when goal is done and not paused */}
+              {isCompleted && !isPaused && (
+                <CompletionScreen
+                  goal={goal}
+                  dashboard={dashboard}
+                  onReset={handleReset}
+                />
+              )}
 
-            {/* Agent Behavior & Security Telemetry Summary */}
-            <AgentBehaviorSummary summary={dashboard?.behaviorSummary || {}} />
-          </div>
+              {/* Goal Integrity Trend Chart (Recharts continuous visualization) */}
+              <GoalIntegrityTrendChart trendData={dashboard?.trendData || []} />
+
+              {/* Main Dashboard 2-Column Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Column — Connected Agent Card, Goal Policy & Telemetry Cards */}
+                <div className="lg:col-span-4 space-y-5">
+                  <ConnectedAgentCard
+                    status={effectiveStatus}
+                    onOpenConnectModal={() => setConnectModalOpen(true)}
+                    onViewActivity={scrollToTimeline}
+                    onStatusChange={onStatusChange}
+                  />
+                  <GoalCard goal={goal} />
+                  <StatsCards dashboard={dashboard} />
+                  <GoalIntegrityCard
+                    actions={actions || []}
+                    score={dashboard?.overallGoalIntegrity ?? dashboard?.goalIntegrityScore ?? 100}
+                  />
+                  <GoalVersionHistory
+                    goalVersion={goal?.goalVersion || dashboard?.goalVersion || 1}
+                    versionHistory={goal?.versionHistory || []}
+                  />
+                </div>
+
+                {/* Right Column — Live Activity Timeline & Behavior Summary */}
+                <div id="activity-timeline-section" className="lg:col-span-8 space-y-5">
+                  <ActivityTimeline
+                    actions={actions || []}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onSelectAction={setSelectedAction}
+                  />
+
+                  {/* Agent Behavior & Security Telemetry Summary */}
+                  <AgentBehaviorSummary summary={dashboard?.behaviorSummary || {}} />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </main>
 
@@ -220,4 +253,3 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
     </div>
   );
 }
-

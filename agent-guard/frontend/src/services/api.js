@@ -131,6 +131,23 @@ export async function disconnectAgent(sessionId = null, conversationId = null) {
   return res.data;
 }
 
+// ─── Advanced Feature Endpoints ────────────────────────────────
+
+export async function simulateThreat(goalId, attackType, customPrompt = null, customTarget = null) {
+  const res = await api.post('/api/threats/simulate', { goalId, attackType, customPrompt, customTarget });
+  return res.data;
+}
+
+export async function evaluatePolicyAction(goalId, actionType, target, description) {
+  const res = await api.post('/api/policy/evaluate', { goalId, actionType, target, description });
+  return res.data;
+}
+
+export async function getComplianceReport(goalId) {
+  const res = await api.get(`/api/compliance/report/${goalId}`);
+  return res.data;
+}
+
 export default api;
 
 
