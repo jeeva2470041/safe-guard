@@ -1,6 +1,6 @@
 {
   "agent-guard-interceptor": {
-    "enabled": true,
+    "enabled": false,
     "PreInvocation": [
       {
         "type": "command",
