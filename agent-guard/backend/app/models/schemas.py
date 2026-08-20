@@ -1,10 +1,99 @@
 """
 Pydantic schemas for request/response validation.
+Supports Phase 1: Intent-Preserving Runtime Security Gateway with formal User Intent Model.
+Supports Phase 2: Real-World Action Authorization, External Context Trust, and Contextual Human Approval.
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Dict, Any, Optional
+from enum import Enum
 from datetime import datetime
+
+
+# ─── Enums ────────────────────────────────────────────────────
+
+class ConsequenceLevel(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class ExternalContentType(str, Enum):
+    INFORMATION = "INFORMATION"
+    INSTRUCTION = "INSTRUCTION"
+
+
+class ApprovalMode(str, Enum):
+    ONCE = "ONCE"
+    SIMILAR = "SIMILAR"
+    REJECT = "REJECT"
+    ABORT = "ABORT"
+
+
+# ─── User Intent & Authority Schemas ──────────────────────────
+
+class SubGoal(BaseModel):
+    """Structured sub-goal node within a hierarchical goal representation."""
+    id: str = Field(..., description="Unique sub-goal identifier (e.g. SG-1)")
+    name: str = Field(..., description="Short name of the sub-goal")
+    description: Optional[str] = Field(default="", description="Detailed objective of this sub-goal")
+    order: int = Field(default=1, description="Execution sequence position")
+    status: str = Field(default="PENDING", description="PENDING | ACTIVE | COMPLETED | SKIPPED")
+    allowedActions: List[str] = Field(default_factory=list, description="Action types permitted for this sub-goal")
+
+
+class FinancialAuthority(BaseModel):
+    """Defines monetary authorization boundaries for the agent."""
+    authorized: bool = Field(default=False, description="Whether financial transactions are permitted")
+    maxAmount: float = Field(default=0.0, description="Maximum automated transaction limit")
+    currency: str = Field(default="INR", description="Currency symbol or ISO code")
+    requiresApproval: bool = Field(default=True, description="Whether human approval is mandated for payment")
+
+
+class ExternalCommunicationAuthority(BaseModel):
+    """Defines external communication permissions (email, webhook, messaging)."""
+    authorized: bool = Field(default=False, description="Whether external communication is permitted")
+    allowedRecipients: List[str] = Field(default_factory=list, description="Explicit authorized recipient addresses or domains")
+    requiresApproval: bool = Field(default=True, description="Whether sending communication requires human confirmation")
+
+
+class PersonalDataAuthority(BaseModel):
+    """Defines user data and PII access limits."""
+    authorized: bool = Field(default=True, description="Whether standard user data autofill is permitted")
+    allowedFields: List[str] = Field(default_factory=list, description="Permitted fields (e.g. name, email, phone)")
+    requiresApprovalForSensitive: bool = Field(default=True, description="Whether sensitive data/PII requires human review")
+
+
+class UserIntentModel(BaseModel):
+    """
+    Formal User Intent Model — represents the user's overarching intent,
+    authorized boundaries, authorities, entities, and hierarchical sub-goals.
+    """
+    original_goal: str = Field(..., description="The user's original natural-language prompt")
+    objective: str = Field(..., description="Normalized high-level functional objective")
+    entities: Dict[str, Any] = Field(default_factory=dict, description="Extracted domain entities (origin, destination, budget, etc.)")
+    desired_outcome: str = Field(default="", description="Description of the successful end state")
+    constraints: List[str] = Field(default_factory=list, description="Positive and operational constraints")
+    negative_constraints: List[str] = Field(default_factory=list, description="Explicit negative safety boundaries")
+    allowed_domains: List[str] = Field(default_factory=list, description="Authorized web domains, services, or repository layers")
+    allowed_action_categories: List[str] = Field(default_factory=list, description="Permitted action categories (SEARCH, BROWSE, etc.)")
+    sensitive_action_categories: List[str] = Field(default_factory=list, description="Categories requiring human review (PAYMENT, etc.)")
+    forbidden_action_categories: List[str] = Field(default_factory=list, description="Strictly prohibited action categories")
+    financial_authority: FinancialAuthority = Field(default_factory=FinancialAuthority)
+    external_communication_authority: ExternalCommunicationAuthority = Field(default_factory=ExternalCommunicationAuthority)
+    personal_data_authority: PersonalDataAuthority = Field(default_factory=PersonalDataAuthority)
+    goal_version: int = Field(default=1, description="Intent policy version")
+    sub_goals: List[SubGoal] = Field(default_factory=list, description="Hierarchical sub-goals")
+
+    # Backward-compatible fields for V4/V5 policy consumers
+    domain: Optional[str] = "general software development"
+    technologies: List[str] = Field(default_factory=list)
+    requirements: List[str] = Field(default_factory=list)
+    allowedScope: List[str] = Field(default_factory=list)
+    restrictedScope: List[str] = Field(default_factory=list)
+    sensitiveOperations: List[str] = Field(default_factory=list)
+    isAmbiguous: bool = False
 
 
 # ─── Goal Schemas ───────────────────────────────────────────────
@@ -18,7 +107,7 @@ class GoalCreate(BaseModel):
     )
     goalPolicy: Optional[dict] = Field(
         default=None,
-        description="Optional pre-analyzed dynamic goal policy"
+        description="Optional pre-analyzed dynamic goal policy / User Intent Model"
     )
 
 
@@ -85,8 +174,14 @@ class SessionStartResponse(BaseModel):
 
 # ─── Action Schemas ─────────────────────────────────────────────
 
+class ApproveActionRequest(BaseModel):
+    """Request body for approving/rejecting an action with approvalMode."""
+    approvalMode: str = Field(default="ONCE", description="ONCE | SIMILAR | REJECT | ABORT")
+    reason: Optional[str] = Field(default="Approved by user", description="Human reason for decision")
+
+
 class ActionResponse(BaseModel):
-    """Full action document response."""
+    """Full action document response with Phase 1 & 2 Intent Forensics."""
     actionId: str
     goalId: str
     goalVersion: int = 1
@@ -94,6 +189,22 @@ class ActionResponse(BaseModel):
     actionType: str
     description: str
     target: str
+
+    # Phase 1 & 2: Action-to-Goal Relationship & Forensics
+    source: str = "USER"  # USER | SYSTEM | AGENT_PLAN | TRUSTED_TOOL | WEBSITE | DOCUMENT | EMAIL | SEARCH_RESULT | API_RESPONSE | MCP_TOOL | UNKNOWN
+    purpose: Optional[str] = None
+    goalRelationship: str = "DIRECTLY_RELEVANT"  # DIRECTLY_RELEVANT | SUPPORTING | INDIRECTLY_RELEVANT | UNRELATED | CONTRADICTORY
+    goal_relationship: Optional[str] = None
+    requiredForGoal: bool = True
+    required_for_goal: Optional[bool] = None
+    consequence: Optional[str] = None
+    consequenceLevel: str = "LOW"  # LOW | MEDIUM | HIGH | CRITICAL
+    reversibility: str = "REVERSIBLE"  # REVERSIBLE | PARTIALLY_REVERSIBLE | IRREVERSIBLE
+    currentSubGoal: Optional[str] = None
+    current_sub_goal: Optional[str] = None
+    sourceTrustLevel: str = "TRUSTED"  # TRUSTED | SEMI_TRUSTED | UNTRUSTED
+
+    # Integrity & Drift Forensics
     goalAlignmentScore: int
     alignmentScore: Optional[int] = None
     alignmentStatus: str
@@ -116,6 +227,31 @@ class ActionResponse(BaseModel):
     pauseTriggered: bool = False
     pauseReason: Optional[str] = None
     timestamp: str
+
+
+# ─── External Context & Instruction Evaluation Schemas ─────────
+
+class EvaluateInstructionRequest(BaseModel):
+    """Request to evaluate an external content / instruction from a website/PDF/email/API."""
+    goalId: Optional[str] = None
+    userGoal: Optional[str] = None
+    content: str = Field(..., description="Raw text or instruction received from external source")
+    source: str = Field(default="WEBSITE", description="WEBSITE | PDF | EMAIL | SEARCH_RESULT | API_RESPONSE | DOCUMENT | MCP_RESULT")
+    proposedActionType: Optional[str] = None
+    proposedTarget: Optional[str] = None
+
+
+class EvaluateInstructionResponse(BaseModel):
+    """Result of external content evaluation."""
+    contentType: str = "INFORMATION"  # INFORMATION | INSTRUCTION
+    goalRelationship: str = "SUPPORTING"  # DIRECTLY_RELEVANT | SUPPORTING | INDIRECTLY_RELEVANT | UNRELATED | CONTRADICTORY
+    consequenceLevel: str = "LOW"  # LOW | MEDIUM | HIGH | CRITICAL
+    riskLevel: str = "LOW"  # LOW | MEDIUM | HIGH | CRITICAL
+    riskScore: int = 10
+    decision: str = "ALLOW"  # ALLOW | REQUIRE_APPROVAL | BLOCK
+    reason: str
+    isGoalChanging: bool = False
+    canContinueWorkflow: bool = True
 
 
 # ─── Dashboard & Behavior Schemas ───────────────────────────────
@@ -148,7 +284,7 @@ class AgentBehaviorSummary(BaseModel):
 
 
 class DashboardResponse(BaseModel):
-    """Aggregated statistics for the V5 dashboard."""
+    """Aggregated statistics for the dashboard."""
     totalActions: int = 0
     allowedActions: int = 0
     blockedActions: int = 0
@@ -184,3 +320,51 @@ class AuditLogEntry(BaseModel):
     riskLevel: str
     reason: str
     timestamp: str
+
+
+# ─── Phase 3: Attack Detection & Incident Schemas ───────────────
+
+class AttackChainNode(BaseModel):
+    nodeId: str
+    actionId: str
+    actionType: str
+    target: str
+    decision: str
+    riskLevel: str
+    roleInAttack: str
+    timestamp: str
+
+
+class AttackChainEdge(BaseModel):
+    fromNode: str = Field(..., alias="from")
+    toNode: str = Field(..., alias="to")
+    relation: str
+
+
+class AttackChainSchema(BaseModel):
+    attackType: str
+    goalId: str
+    severity: str
+    nodeCount: int
+    nodes: List[AttackChainNode] = Field(default_factory=list)
+    edges: List[Dict[str, Any]] = Field(default_factory=list)
+    evidence: List[str] = Field(default_factory=list)
+    createdAt: str
+
+
+class IncidentRecord(BaseModel):
+    incidentId: str
+    goalId: str
+    attackType: str
+    severity: str
+    status: str = "OPEN"
+    actionId: str
+    actionType: str
+    target: str
+    triggerReason: str
+    evidence: List[str] = Field(default_factory=list)
+    attackChain: Optional[Dict[str, Any]] = None
+    containmentAction: str = "AGENT_FROZEN"
+    createdAt: str
+    updatedAt: str
+

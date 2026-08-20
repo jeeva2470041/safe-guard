@@ -1,19 +1,22 @@
 """
-Authorization Engine — Combines goal integrity and risk assessment
-to make an authorization decision.
+Authorization Engine — Multi-Factor Deterministic Decision Matrix.
 
-Decision Matrix:
-              | LOW Risk     | MEDIUM Risk       | HIGH Risk    | CRITICAL Risk
-ALIGNED       | ALLOW        | ALLOW             | REQ_APPROVAL | BLOCK
-PARTIAL       | ALLOW        | REQUIRE_APPROVAL  | BLOCK        | BLOCK
-UNALIGNED     | REQ_APPROVAL | BLOCK             | BLOCK        | BLOCK
+Integrates:
+- Goal Alignment (Relationship: DIRECTLY_RELEVANT | SUPPORTING | INDIRECTLY_RELEVANT | UNRELATED | CONTRADICTORY)
+- Instruction Source Trust (USER | AGENT_PLAN | WEBSITE | DOCUMENT | EMAIL | SEARCH_RESULT | UNKNOWN)
+- Authority Scope (Financial, Communication, Personal Data)
+- Contextual Risk & Consequence Levels (LOW | MEDIUM | HIGH | CRITICAL)
+- Multi-Step Trajectory Drift
+- Session Whitelists (APPROVE_SIMILAR history)
 
-Returns:
-    decision: ALLOW | REQUIRE_APPROVAL | BLOCKED
-    reason: explanation string
+Formula:
+  Goal Alignment + Source Trust + Authority Scope + Risk + Consequence + Trajectory Drift
+  -> ALLOW | REQUIRE_APPROVAL | BLOCK
 """
 
-# Decision matrix: alignment_status × risk_level → decision
+from typing import Dict, Any, List, Optional
+
+# Decision matrix: alignment_status × risk_level → base decision
 DECISION_MATRIX = {
     ("ALIGNED", "LOW"): "ALLOW",
     ("ALIGNED", "MEDIUM"): "ALLOW",
@@ -31,12 +34,31 @@ DECISION_MATRIX = {
     ("UNALIGNED", "CRITICAL"): "BLOCK",
 }
 
-# Human-readable reasons for each decision
 DECISION_REASONS = {
-    "ALLOW": "Action is aligned with the user's goal and poses acceptable risk. Approved for execution.",
-    "REQUIRE_APPROVAL": "Action requires human review due to partial alignment or elevated risk level.",
-    "BLOCK": "Action is blocked due to misalignment with user's goal and/or critical risk level.",
+    "ALLOW": "Action is aligned with the user's intent, authorized by policy, and poses acceptable risk.",
+    "REQUIRE_APPROVAL": "Action requires human review due to financial impact, external communication, or elevated consequence.",
+    "BLOCK": "Action is blocked due to misalignment, untrusted source instruction, constraint violation, or critical risk.",
 }
+
+
+def is_action_covered_by_similar_approval(action_type: str, target: str, approved_similar_actions: List[Dict[str, Any]]) -> bool:
+    """Check if the action matches a previously approved similar action pattern in the active session."""
+    if not approved_similar_actions:
+        return False
+
+    action_upper = action_type.upper()
+    target_lower = target.lower()
+
+    for pattern in approved_similar_actions:
+        p_type = str(pattern.get("actionType", "")).upper()
+        p_target = str(pattern.get("target", "")).lower()
+
+        if p_type == action_upper:
+            # If target matches or is sub-path/domain of pattern target
+            if not p_target or p_target in target_lower or target_lower in p_target:
+                return True
+
+    return False
 
 
 def make_authorization_decision(
@@ -46,42 +68,86 @@ def make_authorization_decision(
     risk_score: int,
     alignment_reason: str,
     risk_reason: str,
+    goal_relationship: str = "SUPPORTING",
+    source_trust_level: str = "TRUSTED",
+    consequence: Optional[str] = None,
+    consequence_level: str = "LOW",
+    reversibility: str = "REVERSIBLE",
+    financial_authority: Optional[Dict[str, Any]] = None,
+    communication_authority: Optional[Dict[str, Any]] = None,
+    action_type: str = "GENERAL_ACTION",
+    target: str = "",
+    approved_similar_actions: Optional[List[Dict[str, Any]]] = None,
+    is_aborted: bool = False
 ) -> dict:
     """
-    Make an authorization decision based on goal alignment and risk assessment.
-
-    Args:
-        alignment_status: ALIGNED | PARTIALLY_ALIGNED | UNALIGNED
-        alignment_score: 0-100
-        risk_level: LOW | MEDIUM | HIGH | CRITICAL
-        risk_score: 0-100
-        alignment_reason: Reason from goal integrity engine
-        risk_reason: Reason from risk engine
-
-    Returns:
-        dict with decision, reason, and detailed_reason
+    Make a multi-factor deterministic authorization decision.
     """
-    # Look up in decision matrix
+    if is_aborted:
+        return {
+            "decision": "BLOCK",
+            "reason": "Session has been aborted by the user. No further actions are permitted.",
+            "goalRelationship": "CONTRADICTORY",
+            "sourceTrustLevel": source_trust_level,
+            "reversibility": reversibility,
+            "consequenceLevel": consequence_level
+        }
+
+    action_upper = action_type.upper()
     key = (alignment_status, risk_level)
-    decision = DECISION_MATRIX.get(key, "BLOCK")  # Default to BLOCK if unknown
+    decision = DECISION_MATRIX.get(key, "BLOCK")
 
-    # Build a detailed reason
-    base_reason = DECISION_REASONS.get(decision, "Unknown decision.")
+    # 1. Check Session Whitelist (APPROVE_SIMILAR)
+    if approved_similar_actions and is_action_covered_by_similar_approval(action_upper, target, approved_similar_actions):
+        if risk_level != "CRITICAL" and goal_relationship != "CONTRADICTORY":
+            decision = "ALLOW"
 
+    # 2. Contradictory Goal Relationship or Untrusted Source Injection -> Hard BLOCK
+    elif goal_relationship == "CONTRADICTORY" or (source_trust_level == "UNTRUSTED" and risk_level in ("HIGH", "CRITICAL")):
+        decision = "BLOCK"
+
+    # 3. Critical Risk Target -> Hard BLOCK
+    elif risk_level == "CRITICAL" or consequence_level == "CRITICAL":
+        decision = "BLOCK"
+
+    # 4. Financial Payment Actions
+    elif action_upper in ("EXTERNAL_TRANSACTION", "FINANCIAL_INITIATE_PAYMENT", "FINANCIAL_CONFIRM_PAYMENT", "PAYMENT") or "pay" in action_upper.lower():
+        if financial_authority and financial_authority.get("authorized", False) and not financial_authority.get("requiresApproval", True):
+            decision = "ALLOW"
+        else:
+            decision = "REQUIRE_APPROVAL"
+
+    # 5. External Communication Actions
+    elif action_upper in ("EXTERNAL_COMMUNICATION", "EMAIL_SEND", "SEND_EMAIL") or ("email" in action_upper.lower() and "send" in action_upper.lower()):
+        if communication_authority and communication_authority.get("authorized", False) and not communication_authority.get("requiresApproval", True):
+            decision = "ALLOW"
+        else:
+            decision = "REQUIRE_APPROVAL"
+
+    # 6. Direct / Supporting Safe Actions (Flight searches, Room picks, Form filling, Component edits)
+    elif goal_relationship in ("DIRECTLY_RELEVANT", "SUPPORTING") and risk_level in ("LOW", "MEDIUM"):
+        decision = "ALLOW"
+
+    # Human-readable explanation
+    base_reason = DECISION_REASONS.get(decision, "Evaluated action against security policy.")
     detailed_parts = [base_reason]
-    detailed_parts.append(f"Goal Alignment: {alignment_score}% ({alignment_status}).")
-    detailed_parts.append(f"Risk Level: {risk_level} (score: {risk_score}).")
+    detailed_parts.append(f"Intent Alignment: {alignment_score}% ({alignment_status}, {goal_relationship}).")
+    detailed_parts.append(f"Risk Rating: {risk_level} (score: {risk_score}, consequence: {consequence_level}).")
 
+    if consequence:
+        detailed_parts.append(f"Impact: {consequence}")
     if decision == "BLOCK":
-        detailed_parts.append(f"Integrity: {alignment_reason}")
-        detailed_parts.append(f"Risk: {risk_reason}")
-
-    if decision == "REQUIRE_APPROVAL":
-        detailed_parts.append(f"Review needed: {alignment_reason}")
+        detailed_parts.append(f"Violation: {alignment_reason}")
+    elif decision == "REQUIRE_APPROVAL":
+        detailed_parts.append(f"Confirmation required: {alignment_reason or risk_reason}")
 
     detailed_reason = " ".join(detailed_parts)
 
     return {
         "decision": decision,
         "reason": detailed_reason,
+        "goalRelationship": goal_relationship,
+        "sourceTrustLevel": source_trust_level,
+        "reversibility": reversibility,
+        "consequenceLevel": consequence_level
     }

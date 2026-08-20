@@ -1,19 +1,42 @@
 """
-Goal Drift Engine — Advanced Multi-Step Goal Drift Detection & Trajectory Analysis.
+Goal Drift & Goal Hijacking Engine — Phase 3.
 
-Evaluates not only the current action but the rolling multi-step trajectory
-of recent agent actions to detect when an agent is progressively moving away
-from the user's established Goal Policy.
+Evaluates multi-step goal drift and detects runtime Goal Hijacking:
+- Rolling trajectory analysis across action history
+- Objective Transition Detection: detects when the agent moves from legitimate domain tasks
+  to unrelated objectives (e.g. flight search -> download tool -> steal cookies)
+- Domain Category Jump Scoring: quantifies categorical divergence across sequential actions
+- Hijacking Alerting: calculates goal hijacking confidence and triggers containment
 
 Drift Score Ranges (0–100):
   0–20:   NORMAL
   21–40:  LOW
   41–60:  MODERATE
   61–80:  HIGH
-  81–100: CRITICAL
+  81–100: CRITICAL (GOAL HIJACKED)
 """
 
 from typing import Dict, Any, List, Optional
+
+
+# Domain categories for category-jump analysis (ordered by priority)
+ACTION_DOMAIN_CATEGORIES = {
+    "CREDENTIALS": ["cookie", "cookies.sqlite", ".env", "id_rsa", "id_ed25519", "credentials", "secrets", "token", "password", "shadow"],
+    "SYSTEM_ADMIN": ["sudo", "systemctl", "netsh", "chmod", "chown", "adduser", "passwd", "rm -rf"],
+    "TRAVEL": ["flight", "hotel", "seat", "passenger", "ticket", "airline", "indigo", "expedia", "booking"],
+    "DEVELOPMENT": ["react", "frontend", "login.jsx", "portfolio", "button", "component", "css", "html", "javascript", "src/"],
+    "DATABASE": ["database.sql", "schema.sql", "postgres", "mongo", "mysql", "sqlite", "table", "sql"],
+    "GENERIC_TOOLS": ["calculator", "weather", "translate", "search_web", "read_url"]
+}
+
+
+def classify_action_domain(action_type: str, target: str, description: str) -> str:
+    """Classifies an individual action into a domain category."""
+    combined = f"{action_type} {target} {description}".lower()
+    for cat, keywords in ACTION_DOMAIN_CATEGORIES.items():
+        if any(kw in combined for kw in keywords):
+            return cat
+    return "GENERAL"
 
 
 def get_drift_level(score: int) -> str:
@@ -59,12 +82,15 @@ def detect_goal_drift(
     1. Direct scope and constraint divergence of the proposed action.
     2. Historical trajectory and recent action alignment degradation.
     3. Consecutive unaligned action streaks and scope jumping.
+    4. Goal Hijacking Detection: category transition divergence.
     """
     if not goal_policy:
         return {
             "driftScore": 0,
             "driftLevel": "NORMAL",
             "driftDetected": False,
+            "isGoalHijacked": False,
+            "hijackingConfidence": 0.0,
             "rollingIntegrity": 100.0,
             "reason": "Initial baseline action with active policy."
         }
@@ -77,6 +103,7 @@ def detect_goal_drift(
     restricted_scope = [s.lower() for s in goal_policy.get("restrictedScope", [])]
     allowed_scope = [s.lower() for s in goal_policy.get("allowedScope", [])]
     constraints = [c.lower() for c in goal_policy.get("constraints", [])]
+    user_goal = goal_policy.get("original_goal") or goal_policy.get("userGoal") or goal_policy.get("objective") or ""
 
     base_drift = 0
     reasons = []
@@ -115,12 +142,10 @@ def detect_goal_drift(
     history_len = len(previous_actions)
     recent_actions = previous_actions[-4:] if history_len > 4 else previous_actions
 
-    # Check recent alignment decline
     if recent_actions:
         recent_scores = [a.get("goalAlignmentScore", 100) for a in recent_actions]
         recent_avg = sum(recent_scores) / len(recent_scores)
         
-        # If recent average is below 60, add trajectory drift
         if recent_avg < 50:
             base_drift += 30
             reasons.append(f"Recent action trajectory is severely degraded (avg alignment: {int(recent_avg)}%)")
@@ -128,7 +153,6 @@ def detect_goal_drift(
             base_drift += 15
             reasons.append(f"Recent actions exhibit declining goal alignment ({int(recent_avg)}%)")
 
-        # Check consecutive unaligned streak
         unaligned_streak = 0
         for act in reversed(previous_actions):
             if act.get("decision") in ("BLOCK", "REJECTED") or act.get("goalAlignmentScore", 100) < 60:
@@ -145,10 +169,39 @@ def detect_goal_drift(
     if total_blocked > 0:
         base_drift += min(20, total_blocked * 8)
 
+    # ── Factor 4: Goal Hijacking & Domain Category Transition Analysis ──
+    is_hijacked = False
+    hijacking_confidence = 0.0
+    
+    proposed_domain = classify_action_domain(action_type, target, description)
+    initial_domain = "GENERAL"
+    if user_goal:
+        initial_domain = classify_action_domain("GOAL", user_goal, "")
+
+    # If goal is Travel/Frontend, but proposed action targets CREDENTIALS, SYSTEM_ADMIN, or unaligned DATABASE
+    if initial_domain in ("TRAVEL", "DEVELOPMENT") and proposed_domain in ("CREDENTIALS", "SYSTEM_ADMIN", "DATABASE"):
+        base_drift = max(base_drift + 55, 80)
+        is_hijacked = True
+        hijacking_confidence = max(hijacking_confidence, 0.85)
+        reasons.append(f"Goal Hijacking Detected: Abrupt transition from '{initial_domain}' goal to unauthorized '{proposed_domain}' action.")
+
+    # Check for trajectory domain shift (e.g. Action 1: Travel, Action 2: Download, Action 3: Credentials)
+    if previous_actions:
+        history_domains = [classify_action_domain(a.get("actionType", ""), a.get("target", ""), a.get("description", "")) for a in previous_actions]
+        if len(set(history_domains)) >= 2 and proposed_domain in ("CREDENTIALS", "SYSTEM_ADMIN"):
+            is_hijacked = True
+            hijacking_confidence = max(hijacking_confidence, 0.9)
+            base_drift += 40
+            reasons.append("Multi-step Goal Hijacking Trajectory confirmed across divergent domain stages.")
+
     # Final score clamping
     drift_score = max(0, min(100, base_drift))
     drift_level = get_drift_level(drift_score)
     drift_detected = drift_score >= 41  # MODERATE, HIGH, CRITICAL
+
+    if drift_score >= 80:
+        is_hijacked = True
+        hijacking_confidence = max(hijacking_confidence, 0.8)
 
     # Rolling integrity estimate
     rolling_integrity = calculate_rolling_integrity(previous_actions)
@@ -159,6 +212,8 @@ def detect_goal_drift(
         "driftScore": drift_score,
         "driftLevel": drift_level,
         "driftDetected": drift_detected,
+        "isGoalHijacked": is_hijacked,
+        "hijackingConfidence": round(hijacking_confidence, 2),
         "rollingIntegrity": rolling_integrity,
         "reason": reason_str
     }

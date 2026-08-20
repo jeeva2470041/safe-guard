@@ -92,15 +92,38 @@ export async function stopAgent(goalId) {
   return res.data;
 }
 
-// ─── Action Endpoints ──────────────────────────────────────────
-
-export async function approveAction(actionId) {
-  const res = await api.post(`/api/actions/${actionId}/approve`);
+export async function approveAction(actionId, approvalMode = "ONCE", reason = "User approved via dashboard") {
+  const res = await api.post(`/api/actions/${actionId}/approve`, { approvalMode, reason });
   return res.data;
 }
 
-export async function rejectAction(actionId) {
-  const res = await api.post(`/api/actions/${actionId}/reject`);
+export async function rejectAction(actionId, reason = "User rejected via dashboard") {
+  const res = await api.post(`/api/actions/${actionId}/reject`, { reason });
+  return res.data;
+}
+
+export async function abortGoal(goalId) {
+  const res = await api.post(`/api/goals/${goalId}/abort`);
+  return res.data;
+}
+
+export async function getGoalIntent(goalId) {
+  const res = await api.get(`/api/goals/${goalId}/intent`);
+  return res.data;
+}
+
+export async function getGoalSubGoals(goalId) {
+  const res = await api.get(`/api/goals/${goalId}/sub-goal`);
+  return res.data;
+}
+
+export async function evaluateContextInstruction(content, source = "WEBSITE", goalId = null) {
+  const res = await api.post('/api/context/evaluate-instruction', { content, source, goalId });
+  return res.data;
+}
+
+export async function runRealWorldBookingSimulation() {
+  const res = await api.post('/api/demo/real-world-booking');
   return res.data;
 }
 
@@ -148,7 +171,35 @@ export async function getComplianceReport(goalId) {
   return res.data;
 }
 
+// ─── Phase 3: Incident & Attack Forensics ──────────────────────
+
+export async function getIncidents(goalId) {
+  const res = await api.get(`/api/incidents/${goalId}`);
+  return res.data;
+}
+
+export async function getIncidentSummary(goalId) {
+  const res = await api.get(`/api/incidents/${goalId}/summary`);
+  return res.data;
+}
+
+export async function getIncidentDetail(incidentId) {
+  const res = await api.get(`/api/incidents/detail/${incidentId}`);
+  return res.data;
+}
+
+export async function resolveIncident(incidentId) {
+  const res = await api.post(`/api/incidents/${incidentId}/resolve`);
+  return res.data;
+}
+
+export async function unfreezeGoalAfterIncident(goalId) {
+  const res = await api.post(`/api/incidents/${goalId}/unfreeze`);
+  return res.data;
+}
+
 export default api;
+
 
 
 

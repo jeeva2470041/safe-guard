@@ -109,7 +109,12 @@ async def intercept_tool_action(req: InterceptRequest):
         target=normalized["target"],
         description=normalized["description"],
         agent_id="GOOGLE-ANTIGRAVITY",
-        execute_tool=False
+        execute_tool=False,
+        source=normalized.get("source", "AGENT_PLAN"),
+        purpose=normalized.get("purpose"),
+        consequence=normalized.get("consequence"),
+        consequence_level=normalized.get("consequenceLevel", "LOW"),
+        reversibility=normalized.get("reversibility", "REVERSIBLE")
     )
 
     gateway_decision = action_doc.get("decision", "ALLOW")
@@ -137,6 +142,11 @@ async def intercept_tool_action(req: InterceptRequest):
         "goalVersion": action_doc.get("goalVersion", 1),
         "normalizedActionType": normalized["actionType"],
         "target": normalized["target"],
+        "source": action_doc.get("source", "USER"),
+        "purpose": action_doc.get("purpose"),
+        "goalRelationship": action_doc.get("goalRelationship", "SUPPORTING"),
+        "requiredForGoal": action_doc.get("requiredForGoal", True),
+        "currentSubGoal": action_doc.get("currentSubGoal"),
         "goalAlignmentScore": action_doc.get("goalAlignmentScore", 100),
         "riskLevel": action_doc.get("riskLevel", "LOW"),
         "riskScore": action_doc.get("riskScore", 0),

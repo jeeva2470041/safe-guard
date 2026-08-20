@@ -8,6 +8,7 @@ import {
   FlaskConical,
   FileCheck,
   Zap,
+  Flame,
 } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
@@ -22,6 +23,7 @@ export default function Header({
   activeTab = 'dashboard',
   onTabChange,
   showNav = true,
+  openIncidentsCount = 0,
 }) {
   const statusConfig = {
     IDLE: { color: 'bg-gray-500', text: 'IDLE', pulse: false },
@@ -41,6 +43,13 @@ export default function Header({
 
   const tabs = [
     { id: 'dashboard', label: 'SOC Dashboard', shortLabel: 'Dashboard', icon: LayoutDashboard },
+    {
+      id: 'incidents',
+      label: 'Attack Forensics',
+      shortLabel: 'Forensics',
+      icon: Flame,
+      badge: openIncidentsCount,
+    },
     { id: 'threats', label: 'Threat Simulator', shortLabel: 'Threats', icon: ShieldAlert },
     { id: 'sandbox', label: 'Policy Sandbox', shortLabel: 'Sandbox', icon: FlaskConical },
     { id: 'compliance', label: 'Compliance & Audit', shortLabel: 'Audit', icon: FileCheck },
@@ -142,6 +151,11 @@ export default function Header({
                     />
                     <span className="hidden lg:inline tracking-wide">{tab.label}</span>
                     <span className="inline lg:hidden tracking-wide">{tab.shortLabel}</span>
+                    {tab.badge > 0 && (
+                      <span className="ml-1 px-1.5 py-0.2 rounded-full text-[0.6rem] font-extrabold font-mono bg-red-500 text-white shadow-sm shadow-red-500/50 animate-pulse">
+                        {tab.badge}
+                      </span>
+                    )}
                   </button>
                 );
               })}

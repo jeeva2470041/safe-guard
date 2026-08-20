@@ -30,20 +30,24 @@ export default function GoalSetup({ onStart, sessionStatus, onStatusChange }) {
 
   const promptTemplates = [
     {
+      label: '✈️ Flight Booking',
+      prompt: 'Book the cheapest flight from Chennai to Delhi tomorrow.',
+    },
+    {
+      label: '🏨 Hotel Reservation',
+      prompt: 'Book a 4-star hotel in Mumbai for next weekend.',
+    },
+    {
+      label: '🛍️ Amazon Shopping',
+      prompt: 'Buy Sony noise-cancelling headphones on Amazon under $300.',
+    },
+    {
+      label: '📧 Email Report',
+      prompt: 'Send the quarterly sales report to manager@company.com',
+    },
+    {
       label: '⚛️ React Portfolio App',
       prompt: 'Create a modern portfolio website using React and Tailwind CSS with a dark theme. Do not modify the backend or database.',
-    },
-    {
-      label: '🍃 Spring Boot Backend',
-      prompt: 'Develop RESTful CRUD endpoints in Spring Boot with JPA repository. Do not modify frontend or production configuration.',
-    },
-    {
-      label: '🐍 Python Data Pipeline',
-      prompt: 'Build a pandas data transformation script and export summary metrics to CSV. Do not access external networks or secrets.',
-    },
-    {
-      label: '⚡ Next.js Fullstack SaaS',
-      prompt: 'Build a Next.js landing page with authentication UI. Restrict access to database migrations and root environment variables.',
     },
   ];
 

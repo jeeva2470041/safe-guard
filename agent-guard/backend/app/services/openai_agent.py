@@ -229,6 +229,11 @@ Respond strictly in JSON format.
         test_target = f"{primary_file.split('.')[0].lower()}-tests"
 
         # 4. Classify Goal Intent & Build Adapted Action Sequence
+        is_flight = any(w in goal_lower for w in ["flight", "airline", "fly", "ticket", "indigo", "airindia"])
+        is_hotel = any(w in goal_lower for w in ["hotel", "room", "stay", "resort", "inn"])
+        is_shopping = any(w in goal_lower for w in ["buy", "purchase", "shop", "cart", "product", "amazon", "headphone"])
+        is_email = any(w in goal_lower for w in ["email", "mail", "send message", "inbox", "gmail"])
+
         is_scenario_a = "dark theme" in goal_lower or "scenario-a" in goal_lower or "normal demo" in goal_lower
         is_scenario_b = "drift" in goal_lower or "scenario-b" in goal_lower or "diverge" in goal_lower
         is_scenario_c = "critical" in goal_lower or "scenario-c" in goal_lower or "violation demo" in goal_lower
@@ -239,6 +244,106 @@ Respond strictly in JSON format.
         is_complex = len(constraints) >= 2 or len(words) > 12 or "portfolio" in goal_lower or "auth" in goal_lower
 
         sequence = []
+
+        # ── REAL-WORLD DOMAIN 1: Flight Booking ──
+        if is_flight:
+            sequence = [
+                {
+                    "action_type": "BROWSER_SEARCH",
+                    "target": "indigo.in/flights",
+                    "description": f"Search flights matching user query: '{user_goal}'"
+                },
+                {
+                    "action_type": "BROWSER_CLICK",
+                    "target": "Select Flight 6E-204",
+                    "description": "Select lowest fare direct flight option 6E-204"
+                },
+                {
+                    "action_type": "BROWSER_TYPE",
+                    "target": "Passenger Information Form",
+                    "description": "Fill passenger name, email, and phone contact details"
+                },
+                {
+                    "action_type": "BROWSER_CLICK",
+                    "target": "Seat 14A (Window)",
+                    "description": "Select standard seat 14A for passenger"
+                },
+                {
+                    "action_type": "EXTERNAL_TRANSACTION",
+                    "target": "Airline Payment Gateway",
+                    "description": "Submit payment authorization for ₹6,500 flight ticket"
+                }
+            ]
+
+        # ── REAL-WORLD DOMAIN 2: Hotel Reservation ──
+        elif is_hotel:
+            sequence = [
+                {
+                    "action_type": "BROWSER_SEARCH",
+                    "target": "booking.com/hotels",
+                    "description": f"Search hotel accommodations matching: '{user_goal}'"
+                },
+                {
+                    "action_type": "BROWSER_CLICK",
+                    "target": "Select Deluxe King Room",
+                    "description": "Select Deluxe King Room with complimentary breakfast"
+                },
+                {
+                    "action_type": "BROWSER_TYPE",
+                    "target": "Guest Details Form",
+                    "description": "Fill primary guest names and arrival time"
+                },
+                {
+                    "action_type": "EXTERNAL_TRANSACTION",
+                    "target": "Hotel Payment Gateway",
+                    "description": "Process reservation deposit payment"
+                }
+            ]
+
+        # ── REAL-WORLD DOMAIN 3: Shopping / E-Commerce ──
+        elif is_shopping:
+            sequence = [
+                {
+                    "action_type": "BROWSER_SEARCH",
+                    "target": "amazon.com/search",
+                    "description": f"Search product listings for: '{user_goal}'"
+                },
+                {
+                    "action_type": "BROWSER_CLICK",
+                    "target": "Add to Cart Button",
+                    "description": "Add chosen product variant to shopping cart"
+                },
+                {
+                    "action_type": "BROWSER_TYPE",
+                    "target": "Shipping Address Form",
+                    "description": "Enter shipping address and delivery preferences"
+                },
+                {
+                    "action_type": "EXTERNAL_TRANSACTION",
+                    "target": "Amazon Checkout",
+                    "description": "Authorize purchase charge at checkout"
+                }
+            ]
+
+        # ── REAL-WORLD DOMAIN 4: Email Communication ──
+        elif is_email:
+            sequence = [
+                {
+                    "action_type": "FILE_WRITE",
+                    "target": "email_draft.txt",
+                    "description": f"Draft email message content for: '{user_goal}'"
+                },
+                {
+                    "action_type": "FILE_READ",
+                    "target": "attachments/report.pdf",
+                    "description": "Inspect and attach requested document"
+                },
+                {
+                    "action_type": "EXTERNAL_COMMUNICATION",
+                    "target": "manager@company.com",
+                    "description": "Transmit email to recipient through mail service"
+                }
+            ]
 
         # ── SCENARIO A: Normal Agent (High Integrity, All Aligned) ──
         if is_scenario_a:

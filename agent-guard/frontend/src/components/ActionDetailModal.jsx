@@ -1,9 +1,13 @@
-import { X, Lock } from 'lucide-react';
+import { X, Lock, ShieldCheck, Compass, ArrowRightLeft, Check, CheckCheck, Ban, OctagonAlert, AlertCircle } from 'lucide-react';
 
 /**
  * ActionDetailModal — Detailed security decision breakdown and explainable audit view.
+ * Supports Phase 1 & Phase 2:
+ * - Intent Forensics, Source Trust, Sub-Goal hierarchy
+ * - Consequence levels (LOW, MEDIUM, HIGH, CRITICAL)
+ * - 4-choice Contextual Approval: Approve Once, Approve Similar Actions, Reject, Abort Session.
  */
-export default function ActionDetailModal({ action, onClose }) {
+export default function ActionDetailModal({ action, onClose, onApprove, onReject, onAbort }) {
   if (!action) return null;
 
   const getRiskBadge = (level) => {
@@ -14,6 +18,16 @@ export default function ActionDetailModal({ action, onClose }) {
       CRITICAL: 'bg-red-500/15 text-red-400 border-red-500/30',
     };
     return config[level] || config.MEDIUM;
+  };
+
+  const getConsequenceBadge = (level) => {
+    const config = {
+      LOW: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      MEDIUM: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+      HIGH: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+      CRITICAL: 'bg-red-500/15 text-red-400 border-red-500/30',
+    };
+    return config[level] || config.LOW;
   };
 
   const getDecisionBadge = (decision) => {
@@ -39,11 +53,28 @@ export default function ActionDetailModal({ action, onClose }) {
     return config[cls] || 'bg-gray-700 text-gray-300 border-gray-600';
   };
 
+  const getRelationshipBadge = (rel) => {
+    const config = {
+      DIRECTLY_RELEVANT: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+      SUPPORTING: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+      INDIRECTLY_RELEVANT: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+      UNRELATED: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
+      CONTRADICTORY: 'bg-red-500/15 text-red-300 border-red-500/30',
+    };
+    return config[rel] || 'bg-slate-700 text-slate-300 border-slate-600';
+  };
+
   const alignmentScore = action.goalAlignmentScore ?? action.alignmentScore ?? 100;
   const driftScore = action.driftScore ?? 0;
   const driftLevel = action.driftLevel ?? 'NORMAL';
   const hasViolations = action.violatedConstraints && action.violatedConstraints.length > 0;
   const classification = action.actionClassification || (hasViolations ? 'DANGEROUS' : alignmentScore >= 80 ? 'PRODUCTIVE' : 'UNCERTAIN');
+  const goalRelationship = action.goalRelationship || action.goal_relationship || 'SUPPORTING';
+  const source = action.source || 'USER';
+  const subGoal = action.currentSubGoal || action.current_sub_goal;
+  const reversibility = action.reversibility || 'REVERSIBLE';
+  const consequenceLevel = action.consequenceLevel || (action.riskLevel === 'CRITICAL' ? 'CRITICAL' : action.riskLevel === 'HIGH' ? 'HIGH' : 'LOW');
+  const isPendingApproval = action.executionStatus === 'PENDING_APPROVAL' || action.decision === 'REQUIRE_APPROVAL';
 
   return (
     <div className="modal-overlay p-3 sm:p-4" onClick={onClose}>
@@ -97,7 +128,71 @@ export default function ActionDetailModal({ action, onClose }) {
                 "{action.description}"
               </p>
             )}
+
+            {/* Metadata Badges */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2 border-t border-[var(--color-border)]/60 text-[0.65rem]">
+              <span className={`px-2 py-0.5 rounded border font-mono ${getRelationshipBadge(goalRelationship)}`}>
+                {goalRelationship}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300 font-mono">
+                Source: {source}
+              </span>
+              <span className={`px-2 py-0.5 rounded border font-mono ${getConsequenceBadge(consequenceLevel)}`}>
+                Consequence: {consequenceLevel}
+              </span>
+              <span className={`px-2 py-0.5 rounded border font-mono ${reversibility === 'IRREVERSIBLE' ? 'bg-red-500/15 border-red-500/30 text-red-300' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'}`}>
+                {reversibility}
+              </span>
+              {subGoal && (
+                <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-300 font-mono">
+                  Sub-Goal: {subGoal}
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Contextual Approval Card (Phase 2) */}
+          {isPendingApproval && (
+            <div className="p-3.5 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-3">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
+                <AlertCircle size={15} />
+                <span>Action Requires Contextual Human Authorization</span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                This action involves elevated financial or external impact. Select your authorization policy:
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <button
+                  onClick={() => onApprove && onApprove(action.actionId, 'ONCE')}
+                  className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow"
+                >
+                  <Check size={13} />
+                  <span>Approve Once</span>
+                </button>
+                <button
+                  onClick={() => onApprove && onApprove(action.actionId, 'SIMILAR')}
+                  className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors shadow"
+                >
+                  <CheckCheck size={13} />
+                  <span>Approve Similar</span>
+                </button>
+                <button
+                  onClick={() => onReject && onReject(action.actionId)}
+                  className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-colors shadow"
+                >
+                  <Ban size={13} />
+                  <span>Reject</span>
+                </button>
+                <button
+                  onClick={() => onAbort && onAbort(action.goalId)}
+                  className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition-colors shadow"
+                >
+                  <OctagonAlert size={13} />
+                  <span>Abort Session</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 6-Part Decision Breakdown Grid */}
           <div>
@@ -110,7 +205,7 @@ export default function ActionDetailModal({ action, onClose }) {
                 <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] uppercase block font-semibold">
                   Goal Alignment
                 </span>
-                <span className={`text-sm sm:text-base font-bold font-mono ${alignmentScore >= 80 ? 'text-emerald-400' : alignmentScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                <span className={`text-sm sm:text-base font-bold font-mono ${alignmentScore >= 75 ? 'text-emerald-400' : alignmentScore >= 45 ? 'text-amber-400' : 'text-red-400'}`}>
                   {alignmentScore}%
                 </span>
                 <span className="text-[0.6rem] sm:text-[0.65rem] text-[var(--color-text-muted)] block mt-0.5 truncate">
@@ -198,6 +293,19 @@ export default function ActionDetailModal({ action, onClose }) {
             </div>
           )}
 
+          {/* Phase 3 Attack Containment Alert */}
+          {(action.isGoalHijacked || action.reason?.includes('Attack Containment') || action.reason?.includes('Prompt Injection') || action.reason?.includes('Exfiltration')) && (
+            <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/40 space-y-1">
+              <div className="flex items-center gap-1.5 text-red-400 font-bold text-xs uppercase tracking-wider">
+                <OctagonAlert size={14} />
+                <span>Phase 3 Runtime Attack Containment Active</span>
+              </div>
+              <p className="text-[0.7rem] text-red-200">
+                Security engine detected high-confidence attack vector (Prompt Injection, Trajectory Hijacking, Credential Extraction, or Data Exfiltration).
+              </p>
+            </div>
+          )}
+
           {/* Explainable Decision "WHY?" Statement */}
           <div>
             <span className="text-[0.65rem] uppercase tracking-wider text-[var(--color-text-muted)] font-bold block mb-1.5">
@@ -213,7 +321,7 @@ export default function ActionDetailModal({ action, onClose }) {
           {action.verificationMessage && (
             <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-300 break-words">
               <span className="text-emerald-400 font-bold uppercase block text-[0.65rem] mb-0.5">
-                Post-Execution Filesystem Proof:
+                Post-Execution Verification Proof:
               </span>
               {action.verificationMessage}
             </div>

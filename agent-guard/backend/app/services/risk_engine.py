@@ -2,7 +2,12 @@
 Risk Engine — Deterministic risk classification for agent actions.
 
 Maps action types to risk levels and scores.
-Includes special-case overrides for sensitive targets.
+Includes special-case overrides for sensitive targets and real-world task categories.
+
+Phase 1 & Phase 2 Support:
+- Consequence Categories: LOW | MEDIUM | HIGH | CRITICAL
+- Expanded Browser, API, Email, Financial, Forms, and MCP tool actions
+- Sensitive overrides (SSH keys, cookies, credentials, database destruction)
 
 Returns:
     riskLevel: LOW | MEDIUM | HIGH | CRITICAL
@@ -10,19 +15,195 @@ Returns:
     riskReason: explanation string
 """
 
-# Base risk mapping by action type
-# Includes both legacy format (READ_FILE, WRITE_FILE) and Antigravity normalizer format (FILE_READ, FILE_WRITE)
+# Base risk mapping by canonical and legacy action types
 ACTION_RISK_MAP = {
-    # Legacy format (simulated agent)
+    # ── Real-World Browser Actions ──
+    "BROWSER_SEARCH": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Searching the web is a safe informational operation."
+    },
+    "BROWSER_NAVIGATE": {
+        "riskLevel": "LOW",
+        "riskScore": 15,
+        "riskReason": "Navigating to a public URL is a read-only informational action."
+    },
+    "BROWSER_READ_PAGE": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Reading public web page text leaves host state unchanged."
+    },
+    "BROWSER_EXTRACT": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Extracting structured data from web pages is a safe read operation."
+    },
+    "BROWSER_CLICK": {
+        "riskLevel": "LOW",
+        "riskScore": 15,
+        "riskReason": "Clicking page elements (selecting seats, flights, filters) is a safe navigation action."
+    },
+    "BROWSER_SELECT": {
+        "riskLevel": "LOW",
+        "riskScore": 15,
+        "riskReason": "Selecting options in dropdowns is a routine user navigation action."
+    },
+    "BROWSER_TYPE": {
+        "riskLevel": "LOW",
+        "riskScore": 20,
+        "riskReason": "Filling form fields with requested details is a routine web action."
+    },
+    "BROWSER_DOWNLOAD": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 35,
+        "riskReason": "Downloading web resources saves files to local storage."
+    },
+    "BROWSER_SUBMIT": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 45,
+        "riskReason": "Submitting a web form transmits input data to target web service."
+    },
+    "BROWSER_UPLOAD": {
+        "riskLevel": "HIGH",
+        "riskScore": 75,
+        "riskReason": "Uploading files to external services carries data exfiltration risks."
+    },
+
+    # ── Financial Actions ──
+    "FINANCIAL_VIEW_PRICE": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Viewing product or ticket pricing is a read-only operation."
+    },
+    "FINANCIAL_SELECT_PAYMENT": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 40,
+        "riskReason": "Selecting a payment method configures transaction checkout options."
+    },
+    "FINANCIAL_INITIATE_PAYMENT": {
+        "riskLevel": "HIGH",
+        "riskScore": 75,
+        "riskReason": "Initiating payment commits financial charges and mandates human authorization."
+    },
+    "FINANCIAL_CONFIRM_PAYMENT": {
+        "riskLevel": "HIGH",
+        "riskScore": 75,
+        "riskReason": "Final payment confirmation executes financial transactions."
+    },
+    "EXTERNAL_TRANSACTION": {
+        "riskLevel": "HIGH",
+        "riskScore": 75,
+        "riskReason": "External transactions involve monetary charge or irreversible financial commitments."
+    },
+
+    # ── Email Actions ──
+    "EMAIL_READ": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Reading email messages is a read-only operation."
+    },
+    "EMAIL_COMPOSE": {
+        "riskLevel": "LOW",
+        "riskScore": 20,
+        "riskReason": "Drafting an email creates local text without external transmission."
+    },
+    "EMAIL_ATTACH": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 35,
+        "riskReason": "Attaching files stages local documents for transmission."
+    },
+    "EMAIL_SEND": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 55,
+        "riskReason": "Transmitting external emails communicates outside the local system."
+    },
+    "EXTERNAL_COMMUNICATION": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 55,
+        "riskReason": "Transmitting external communication sends data outside the local workspace."
+    },
+
+    # ── Form Actions ──
+    "FORM_FILL": {
+        "riskLevel": "LOW",
+        "riskScore": 20,
+        "riskReason": "Populating form fields with user data is standard routine operation."
+    },
+    "FORM_SUBMIT": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 45,
+        "riskReason": "Submitting forms transmits data to third-party endpoints."
+    },
+
+    # ── REST API Actions ──
+    "API_GET": {
+        "riskLevel": "LOW",
+        "riskScore": 15,
+        "riskReason": "HTTP GET requests are read-only and idempotent."
+    },
+    "API_POST": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 45,
+        "riskReason": "HTTP POST creates or mutates remote state."
+    },
+    "API_PUT": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 45,
+        "riskReason": "HTTP PUT updates remote resources."
+    },
+    "API_PATCH": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 40,
+        "riskReason": "HTTP PATCH modifies remote resource fields."
+    },
+    "API_DELETE": {
+        "riskLevel": "HIGH",
+        "riskScore": 80,
+        "riskReason": "HTTP DELETE deletes remote server data."
+    },
+    "API_REQUEST": {
+        "riskLevel": "LOW",
+        "riskScore": 20,
+        "riskReason": "Fetching URL or API content is a read-only network operation."
+    },
+
+    # ── MCP Tool Actions ──
+    "MCP_DISCOVERY": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Listing available MCP tools and resources is read-only discovery."
+    },
+    "MCP_RESOURCE_READ": {
+        "riskLevel": "LOW",
+        "riskScore": 15,
+        "riskReason": "Reading MCP resources is safe inspection."
+    },
+    "MCP_INVOCATION": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 45,
+        "riskReason": "Invoking MCP tools executes external integrations."
+    },
+    "MCP_RESOURCE_WRITE": {
+        "riskLevel": "HIGH",
+        "riskScore": 75,
+        "riskReason": "Writing MCP resources mutates external server state."
+    },
+
+    # ── Filesystem & Command Actions ──
+    "FILE_READ": {
+        "riskLevel": "LOW",
+        "riskScore": 10,
+        "riskReason": "Reading a file is a safe, non-destructive operation."
+    },
     "READ_FILE": {
         "riskLevel": "LOW",
         "riskScore": 10,
         "riskReason": "Reading a file is a safe, non-destructive operation."
     },
-    "RUN_TESTS": {
-        "riskLevel": "LOW",
-        "riskScore": 15,
-        "riskReason": "Running tests is a standard safe operation."
+    "FILE_WRITE": {
+        "riskLevel": "MEDIUM",
+        "riskScore": 40,
+        "riskReason": "Writing or modifying a file changes the project structure."
     },
     "WRITE_FILE": {
         "riskLevel": "MEDIUM",
@@ -34,43 +215,17 @@ ACTION_RISK_MAP = {
         "riskScore": 50,
         "riskReason": "Modifying an existing file can introduce changes to the codebase."
     },
-    "RUN_COMMAND": {
-        "riskLevel": "HIGH",
-        "riskScore": 70,
-        "riskReason": "Running shell commands can have unpredictable system-level effects."
+    "RUN_TESTS": {
+        "riskLevel": "LOW",
+        "riskScore": 15,
+        "riskReason": "Running tests is a standard safe verification operation."
     },
-    "DELETE_FILE": {
+    "FILE_DELETE": {
         "riskLevel": "HIGH",
         "riskScore": 80,
         "riskReason": "Deleting a file is a destructive, potentially irreversible action."
     },
-    "EXTERNAL_UPLOAD": {
-        "riskLevel": "HIGH",
-        "riskScore": 75,
-        "riskReason": "Uploading data externally risks data exfiltration."
-    },
-    "ACCESS_FILE": {
-        "riskLevel": "MEDIUM",
-        "riskScore": 45,
-        "riskReason": "Accessing a file depends on the sensitivity of the target."
-    },
-    "DELETE_DATABASE": {
-        "riskLevel": "CRITICAL",
-        "riskScore": 100,
-        "riskReason": "Deleting a database is an extremely destructive action."
-    },
-    # Antigravity normalizer format (agent-independent generic action types)
-    "FILE_READ": {
-        "riskLevel": "LOW",
-        "riskScore": 10,
-        "riskReason": "Reading a file is a safe, non-destructive operation."
-    },
-    "FILE_WRITE": {
-        "riskLevel": "MEDIUM",
-        "riskScore": 40,
-        "riskReason": "Writing or modifying a file changes the project structure."
-    },
-    "FILE_DELETE": {
+    "DELETE_FILE": {
         "riskLevel": "HIGH",
         "riskScore": 80,
         "riskReason": "Deleting a file is a destructive, potentially irreversible action."
@@ -80,49 +235,54 @@ ACTION_RISK_MAP = {
         "riskScore": 70,
         "riskReason": "Running shell commands can have unpredictable system-level effects."
     },
-    "EXTERNAL_TRANSACTION": {
+    "RUN_COMMAND": {
         "riskLevel": "HIGH",
-        "riskScore": 75,
-        "riskReason": "External transactions involve real-world financial or irreversible actions."
+        "riskScore": 70,
+        "riskReason": "Running shell commands can have unpredictable system-level effects."
     },
     "SECRET_ACCESS": {
         "riskLevel": "CRITICAL",
         "riskScore": 95,
-        "riskReason": "Accessing secrets exposes API keys, passwords, and credentials."
+        "riskReason": "Accessing secrets exposes private keys, API keys, passwords, or cookies."
     },
-    "BROWSER_NAVIGATE": {
-        "riskLevel": "LOW",
-        "riskScore": 15,
-        "riskReason": "Navigating to a URL is a low-risk investigative action."
+    "DELETE_DATABASE": {
+        "riskLevel": "CRITICAL",
+        "riskScore": 100,
+        "riskReason": "Deleting a database is an extremely destructive action."
     },
-    "BROWSER_SEARCH": {
-        "riskLevel": "LOW",
-        "riskScore": 10,
-        "riskReason": "Searching the web is a safe informational operation."
-    },
-    "API_REQUEST": {
-        "riskLevel": "LOW",
-        "riskScore": 20,
-        "riskReason": "Fetching URL content is a read-only network operation."
-    },
-    "MCP_TOOL_CALL": {
-        "riskLevel": "MEDIUM",
-        "riskScore": 50,
-        "riskReason": "MCP tool calls execute external integrations with variable risk."
+    "EXTERNAL_UPLOAD": {
+        "riskLevel": "HIGH",
+        "riskScore": 75,
+        "riskReason": "Uploading data externally risks data exfiltration."
     },
     "GENERAL_ACTION": {
         "riskLevel": "MEDIUM",
-        "riskScore": 50,
-        "riskReason": "Unknown action type; evaluated with moderate risk as a precaution."
+        "riskScore": 35,
+        "riskReason": "Standard automated agent action."
     },
 }
 
-# Special target overrides — these override the base risk for specific targets
+# Special target overrides
 SENSITIVE_TARGETS = {
     ".env": {
         "riskLevel": "CRITICAL",
         "riskScore": 95,
         "riskReason": "Accessing .env exposes secrets, API keys, and credentials."
+    },
+    "id_rsa": {
+        "riskLevel": "CRITICAL",
+        "riskScore": 98,
+        "riskReason": "Accessing private SSH key exposes host infrastructure to unauthorized takeover."
+    },
+    "id_ed25519": {
+        "riskLevel": "CRITICAL",
+        "riskScore": 98,
+        "riskReason": "Accessing private SSH key exposes host infrastructure to unauthorized takeover."
+    },
+    "cookie": {
+        "riskLevel": "CRITICAL",
+        "riskScore": 95,
+        "riskReason": "Accessing or exfiltrating browser cookies compromises user active sessions."
     },
     "package.json": {
         "riskLevel": "HIGH",
@@ -140,31 +300,20 @@ SENSITIVE_TARGETS = {
 def evaluate_risk(action_type: str, target: str) -> dict:
     """
     Evaluate the risk level of a proposed action.
-
-    Distinguishes simple routine tasks (file reads, safe edits, routine inspection/build commands,
-    safe scratch deletion) from complex high-impact operations (dependency installation, 
-    destructive git, system reconfiguration) and critical security threats.
-
-    Args:
-        action_type: Type of action (READ_FILE, MODIFY_FILE, DELETE_FILE, COMMAND_EXECUTION, etc.)
-        target: Target file or command line string
-
-    Returns:
-        dict with riskLevel, riskScore, riskReason
+    Distinguishes simple routine tasks from high-impact operations and critical security threats.
     """
     action_upper = action_type.upper()
     target_lower = target.lower().strip()
 
-    # Start with the base risk for this action type
     base = ACTION_RISK_MAP.get(action_upper, {
         "riskLevel": "MEDIUM",
-        "riskScore": 40,
+        "riskScore": 35,
         "riskReason": f"Standard action type: {action_type}."
     })
 
     result = dict(base)
 
-    # 1. Check for sensitive target overrides (e.g. .env, package.json, database.sql)
+    # 1. Check for sensitive target overrides
     for sensitive_name, override in SENSITIVE_TARGETS.items():
         if sensitive_name in target_lower:
             if override["riskScore"] > result["riskScore"]:
@@ -173,21 +322,18 @@ def evaluate_risk(action_type: str, target: str) -> dict:
 
     # 2. Smart Command Execution Risk Classification
     if action_upper in ("RUN_COMMAND", "COMMAND_EXECUTION"):
-        # Critical destructive / exfiltration commands -> CRITICAL (BLOCK)
-        if any(crit in target_lower for crit in ("rm -rf /", "rm -rf c:", "format ", "drop database", "cat .env", "type .env", "printenv", "echo $")):
+        if any(crit in target_lower for crit in ("rm -rf /", "rm -rf c:", "format ", "drop database", "cat .env", "type .env", "printenv", "echo $", "id_rsa", "cat ~/.ssh")):
             result = {
                 "riskLevel": "CRITICAL",
                 "riskScore": 95,
                 "riskReason": "Destructive system wipe or credential exposure command."
             }
-        # Complex / high-impact mutating commands -> HIGH risk (REQUIRE_APPROVAL)
         elif any(high in target_lower for high in ("npm install", "pip install", "npm uninstall", "pip uninstall", "git push", "git reset", "git clean", "chmod -r", "chown", "systemctl", "netsh")):
             result = {
                 "riskLevel": "HIGH",
                 "riskScore": 75,
                 "riskReason": "High-impact command modifying dependencies, remote repository, or system environment."
             }
-        # Safe read-only / diagnostic / verification / build commands -> LOW risk (ALLOW immediately)
         elif any(
             target_lower.startswith(p)
             for p in (
@@ -203,7 +349,6 @@ def evaluate_risk(action_type: str, target: str) -> dict:
                 "riskScore": 15,
                 "riskReason": "Standard read-only diagnostic, verification, or build command."
             }
-        # Standard local routine development commands -> MEDIUM risk (ALLOW when aligned)
         else:
             result = {
                 "riskLevel": "MEDIUM",
@@ -213,7 +358,7 @@ def evaluate_risk(action_type: str, target: str) -> dict:
 
     # 3. Smart File Deletion Risk Classification
     if action_upper in ("DELETE_FILE", "FILE_DELETE"):
-        if any(kw in target_lower for kw in ["database", "db", ".sql", ".env", "credentials"]):
+        if any(kw in target_lower for kw in ["database", "db", ".sql", ".env", "credentials", "id_rsa"]):
             result = {
                 "riskLevel": "CRITICAL",
                 "riskScore": 95,
@@ -222,93 +367,80 @@ def evaluate_risk(action_type: str, target: str) -> dict:
         elif any(kw in target_lower for kw in ["package.json", "dockerfile", "docker-compose", "schema", "config", "settings", ".git"]):
             result = {
                 "riskLevel": "HIGH",
-                "riskScore": 75,
-                "riskReason": "Deleting configuration or dependency manifests requires human authorization."
+                "riskScore": 80,
+                "riskReason": "Deleting configuration or dependency manifests carries high risk."
             }
         else:
-            # Simple workspace / scratch files -> MEDIUM risk (ALLOW when aligned)
             result = {
-                "riskLevel": "MEDIUM",
-                "riskScore": 35,
-                "riskReason": "Standard file deletion within project workspace."
+                "riskLevel": "LOW",
+                "riskScore": 25,
+                "riskReason": "Deleting temporary, scratch, or requested file is safe."
+            }
+
+    # 4. Smart File Write Risk Classification
+    if action_upper in ("WRITE_FILE", "MODIFY_FILE", "FILE_WRITE"):
+        if any(kw in target_lower for kw in [".env", "id_rsa", "credentials", "secrets"]):
+            result = {
+                "riskLevel": "CRITICAL",
+                "riskScore": 95,
+                "riskReason": "Attempting to modify or overwrite secret configuration files."
+            }
+        elif any(kw in target_lower for kw in ["package.json", "pom.xml", "settings.py", "dockerfile"]):
+            result = {
+                "riskLevel": "HIGH",
+                "riskScore": 70,
+                "riskReason": "Modifying dependency files alters project build manifests."
+            }
+        elif any(kw in target_lower for kw in [".jsx", ".tsx", ".vue", ".html", ".css", "styles", "component", "page", "button", "header", "footer", "card"]):
+            result = {
+                "riskLevel": "LOW",
+                "riskScore": 25,
+                "riskReason": "Standard frontend UI component editing is low-risk."
             }
 
     return result
 
 
-def get_cumulative_risk_level(score: int) -> str:
-    """Map cumulative risk score to standard V5 levels."""
-    if score <= 30:
-        return "LOW"
-    elif score <= 50:
-        return "MODERATE"
-    elif score <= 70:
-        return "HIGH"
-    return "CRITICAL"
-
-
-def evaluate_cumulative_risk(
-    action_history: list,
-    current_action_risk: dict
-) -> dict:
+def evaluate_cumulative_risk(previous_actions: list, current_action_risk: dict) -> dict:
     """
-    Evaluate cumulative risk trajectory across agent execution history.
-
-    Args:
-        action_history: List of past action dicts.
-        current_action_risk: Result of evaluate_risk for the current action.
-
-    Returns:
-        dict with cumulativeRiskScore (0-100), cumulativeRiskLevel, cumulativeRiskReason
+    Calculate cumulative session risk score based on action history and escalation trends.
     """
-    curr_score = current_action_risk.get("riskScore", 10)
-    history_scores = [a.get("riskScore", 10) for a in action_history]
-    all_scores = history_scores + [curr_score]
+    if not previous_actions:
+        return {
+            "cumulativeRiskScore": current_action_risk["riskScore"],
+            "cumulativeRiskLevel": current_action_risk["riskLevel"],
+            "escalationDetected": False
+        }
 
-    reasons = []
-    
-    # Base: current action risk score weighted with maximum history risk
-    max_history_risk = max(all_scores) if all_scores else curr_score
-    recent_scores = all_scores[-3:] if len(all_scores) >= 3 else all_scores
-    recent_avg = sum(recent_scores) / len(recent_scores)
+    high_risk_count = sum(1 for a in previous_actions if a.get("riskLevel") in ("HIGH", "CRITICAL"))
+    blocked_count = sum(1 for a in previous_actions if a.get("decision") == "BLOCK")
 
-    # Base formula: 40% current + 30% recent average + 30% peak risk
-    cum_score = int((curr_score * 0.40) + (recent_avg * 0.30) + (max_history_risk * 0.30))
+    base_score = current_action_risk["riskScore"]
+    penalty = (high_risk_count * 10) + (blocked_count * 15)
+    cum_score = min(100, base_score + penalty)
 
-    # Escalation Factor 1: Consecutive high risk actions
-    consecutive_high_risk = 0
-    for s in reversed(all_scores):
-        if s >= 60:
-            consecutive_high_risk += 1
-        else:
-            break
-
-    if consecutive_high_risk >= 2:
-        escalation_bonus = consecutive_high_risk * 10
-        cum_score += escalation_bonus
-        reasons.append(f"Risk escalation detected ({consecutive_high_risk} consecutive high-risk operations)")
-
-    # Escalation Factor 2: Blocked / Critical attempts in history
-    blocked_count = sum(1 for a in action_history if a.get("decision") == "BLOCK")
-    if blocked_count > 0:
-        cum_score += min(25, blocked_count * 10)
-        reasons.append(f"Cumulative risk elevated by {blocked_count} previous blocked security violations")
-
-    # Escalation Factor 3: Touching sensitive credentials or database
-    critical_attempts = sum(1 for a in action_history if a.get("riskLevel") == "CRITICAL")
-    if current_action_risk.get("riskLevel") == "CRITICAL" or critical_attempts > 0:
-        cum_score = max(cum_score, 85)
-        reasons.append("Critical sensitive target accessed or attempted in session")
-
-    # Clamp
-    cum_score = max(0, min(100, cum_score))
-    cum_level = get_cumulative_risk_level(cum_score)
-
-    if not reasons:
-        reasons.append(f"Cumulative risk is {cum_level.lower()} across {len(all_scores)} actions.")
+    if cum_score >= 80:
+        level = "CRITICAL"
+    elif cum_score >= 60:
+        level = "HIGH"
+    elif cum_score >= 35:
+        level = "MEDIUM"
+    else:
+        level = "LOW"
 
     return {
         "cumulativeRiskScore": cum_score,
-        "cumulativeRiskLevel": cum_level,
-        "cumulativeRiskReason": ". ".join(reasons)
+        "cumulativeRiskLevel": level,
+        "escalationDetected": (blocked_count >= 2 or high_risk_count >= 3)
     }
+
+
+def get_cumulative_risk_level(score: int) -> str:
+    """Helper to convert numeric cumulative risk score to string level."""
+    if score >= 80:
+        return "CRITICAL"
+    elif score >= 60:
+        return "HIGH"
+    elif score >= 35:
+        return "MEDIUM"
+    return "LOW"

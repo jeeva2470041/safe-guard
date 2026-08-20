@@ -16,14 +16,17 @@ import ConnectIdeModal from '../components/ConnectIdeModal';
 import ThreatSimulator from '../components/ThreatSimulator';
 import PolicySandbox from '../components/PolicySandbox';
 import ComplianceAudit from '../components/ComplianceAudit';
+import IncidentForensics from '../components/IncidentForensics';
 import { usePolling } from '../hooks/usePolling';
 import {
   getGoal,
   getActions,
   getDashboard,
   getAgentStatus,
+  getIncidentSummary,
   approveAction,
   rejectAction,
+  abortGoal,
   resetGoal,
   resumeAgent,
   stopAgent,
@@ -69,13 +72,21 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
     !!goalId
   );
 
+  // Poll incident summary stats (Phase 3)
+  const { data: incidentSummary } = usePolling(
+    useCallback(() => getIncidentSummary(goalId), [goalId]),
+    1000,
+    !!goalId
+  );
+
   const agentStatus = goal?.status || 'IDLE';
   const isCompleted = agentStatus === 'COMPLETED';
   const isPaused = agentStatus === 'PAUSED' || Boolean(dashboard?.pauseReason);
 
-  const handleApprove = async (actionId) => {
+  const handleApprove = async (actionId, approvalMode = 'ONCE') => {
     try {
-      await approveAction(actionId);
+      await approveAction(actionId, approvalMode);
+      setSelectedAction(null);
     } catch (err) {
       console.error('Failed to approve:', err);
     }
@@ -84,8 +95,18 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
   const handleReject = async (actionId) => {
     try {
       await rejectAction(actionId);
+      setSelectedAction(null);
     } catch (err) {
       console.error('Failed to reject:', err);
+    }
+  };
+
+  const handleAbort = async (targetGoalId) => {
+    try {
+      await abortGoal(targetGoalId || goalId);
+      setSelectedAction(null);
+    } catch (err) {
+      console.error('Failed to abort:', err);
     }
   };
 
@@ -142,10 +163,20 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
         activeTab={activeTab}
         onTabChange={setActiveTab}
         showNav={true}
+        openIncidentsCount={incidentSummary?.open || 0}
       />
 
       <main className="flex-1 max-w-[1440px] mx-auto w-full px-6 py-6">
         <div key={activeTab} className="animate-tab-pane space-y-6">
+          {/* Tab: Attack Forensics View (Phase 3) */}
+          {activeTab === 'incidents' && (
+            <IncidentForensics
+              goalId={goalId}
+              onUnfreezeSuccess={handleResume}
+              onModifyGoalRequest={() => {}}
+            />
+          )}
+
           {/* Tab 1: Threat Simulator View */}
           {activeTab === 'threats' && (
             <ThreatSimulator goalId={goalId} />
@@ -241,6 +272,9 @@ export default function Dashboard({ goalId, onReset, sessionStatus, onStatusChan
       <ActionDetailModal
         action={selectedAction}
         onClose={() => setSelectedAction(null)}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onAbort={handleAbort}
       />
 
       {/* Connect IDE Modal */}

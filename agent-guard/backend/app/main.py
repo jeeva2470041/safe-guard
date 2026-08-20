@@ -13,6 +13,7 @@ from app.database.connection import connect_to_mongo, close_mongo_connection
 from app.api.goals import router as goals_router
 from app.api.actions import router as actions_router
 from app.api.interception import router as interception_router
+from app.api.incidents import router as incidents_router
 
 
 @asynccontextmanager
@@ -61,6 +62,7 @@ app.add_middleware(
 app.include_router(goals_router)
 app.include_router(actions_router)
 app.include_router(interception_router)
+app.include_router(incidents_router)
 
 
 @app.get("/")
