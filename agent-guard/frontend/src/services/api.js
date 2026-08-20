@@ -171,7 +171,7 @@ export async function getComplianceReport(goalId) {
   return res.data;
 }
 
-// ─── Phase 3: Incident & Attack Forensics ──────────────────────
+// ─── Phase 3 & 4: Incident, Forensics & Recovery Endpoints ─────
 
 export async function getIncidents(goalId) {
   const res = await api.get(`/api/incidents/${goalId}`);
@@ -188,13 +188,59 @@ export async function getIncidentDetail(incidentId) {
   return res.data;
 }
 
+export async function getForensicExplanation(incidentId) {
+  const res = await api.get(`/api/incidents/${incidentId}/explanation`);
+  return res.data;
+}
+
 export async function resolveIncident(incidentId) {
   const res = await api.post(`/api/incidents/${incidentId}/resolve`);
   return res.data;
 }
 
+export async function recoverIncident(incidentId, action, params = {}) {
+  const res = await api.post(`/api/incidents/${incidentId}/recover`, {
+    action,
+    ...params,
+  });
+  return res.data;
+}
+
 export async function unfreezeGoalAfterIncident(goalId) {
   const res = await api.post(`/api/incidents/${goalId}/unfreeze`);
+  return res.data;
+}
+
+// ─── Phase 4: Checkpoints, Blast Radius & Audit Verification ───
+
+export async function createCheckpoint(goalId, label = 'Manual Checkpoint', metadata = {}) {
+  const res = await api.post('/api/checkpoints', { goalId, label, metadata });
+  return res.data;
+}
+
+export async function getCheckpoints(goalId) {
+  const res = await api.get(`/api/checkpoints/${goalId}`);
+  return res.data;
+}
+
+export async function rollbackCheckpoint(checkpointId, goalId) {
+  const res = await api.post(`/api/checkpoints/${checkpointId}/rollback?goal_id=${goalId}`);
+  return res.data;
+}
+
+export async function verifyAuditChain(goalId = null) {
+  const endpoint = goalId ? `/api/audit/verify/${goalId}` : '/api/audit/verify';
+  const res = await api.get(endpoint);
+  return res.data;
+}
+
+export async function getAuditLogs(goalId) {
+  const res = await api.get(`/api/audit/${goalId}`);
+  return res.data;
+}
+
+export async function getSessionReplay(goalId) {
+  const res = await api.get(`/api/goals/${goalId}/replay`);
   return res.data;
 }
 

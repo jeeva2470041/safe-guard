@@ -26,46 +26,75 @@ import {
   ExternalLink,
   ChevronRight,
   Zap,
+  Play,
+  RotateCcw,
+  Ban,
+  FileCheck,
+  GitBranch,
+  Copy,
+  Sliders,
+  Database,
 } from 'lucide-react';
 import {
   getIncidents,
   getIncidentSummary,
+  getIncidentDetail,
+  getForensicExplanation,
   resolveIncident,
+  recoverIncident,
   unfreezeGoalAfterIncident,
+  getCheckpoints,
+  createCheckpoint,
+  rollbackCheckpoint,
+  verifyAuditChain,
 } from '../services/api';
+import SessionReplayModal from './SessionReplayModal';
 
 /**
- * IncidentForensics — SOC Incident & Attack Forensics Dashboard (Phase 3).
- * Multi-layer threat analysis, attack chain graphs, and runtime containment remediation.
+ * IncidentForensics — SOC Incident & Attack Forensics Dashboard (Phase 3 & 4).
+ * Multi-layer threat analysis, attack chain graphs, blast radius calculation,
+ * 10-point "WHY BLOCKED" forensic explanations, 5-option recovery, and tamper-evident audit verification.
  */
 export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyGoalRequest }) {
   const [incidents, setIncidents] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [forensicExplanation, setForensicExplanation] = useState(null);
   const [filterSeverity, setFilterSeverity] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  const [resolvingId, setResolvingId] = useState(null);
-  const [unfreezing, setUnfreezing] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
+  const [copiedText, setCopiedText] = useState(false);
+
+  // Phase 4 states
+  const [replayModalOpen, setReplayModalOpen] = useState(false);
+  const [checkpoints, setCheckpoints] = useState([]);
+  const [checkpointsOpen, setCheckpointsOpen] = useState(false);
+  const [auditVerification, setAuditVerification] = useState(null);
+  const [verifyingAudit, setVerifyingAudit] = useState(false);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [selectedCheckpointForRollback, setSelectedCheckpointForRollback] = useState('');
+  const [evolveGoalText, setEvolveGoalText] = useState('');
+  const [evolveModalOpen, setEvolveModalOpen] = useState(false);
 
   const fetchIncidentsData = useCallback(async () => {
     if (!goalId) return;
     try {
-      const [listRes, summaryRes] = await Promise.all([
+      const [listRes, summaryRes, chkRes] = await Promise.all([
         getIncidents(goalId),
         getIncidentSummary(goalId),
+        getCheckpoints(goalId).catch(() => ({ checkpoints: [] })),
       ]);
       const incList = listRes?.incidents || [];
       setIncidents(incList);
       setSummary(summaryRes);
+      setCheckpoints(chkRes?.checkpoints || []);
 
       // Auto-select first open incident or first incident if none selected
       if (!selectedIncident && incList.length > 0) {
         const firstOpen = incList.find((i) => i.status === 'OPEN') || incList[0];
         setSelectedIncident(firstOpen);
       } else if (selectedIncident) {
-        // Keep selected incident updated
         const updated = incList.find((i) => i.incidentId === selectedIncident.incidentId);
         if (updated) setSelectedIncident(updated);
       }
@@ -82,9 +111,17 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
     return () => clearInterval(interval);
   }, [fetchIncidentsData]);
 
+  // Fetch 10-point forensic explanation whenever selected incident changes
+  useEffect(() => {
+    if (selectedIncident?.incidentId) {
+      getForensicExplanation(selectedIncident.incidentId)
+        .then((exp) => setForensicExplanation(exp))
+        .catch(() => setForensicExplanation(null));
+    }
+  }, [selectedIncident]);
+
   const handleResolve = async (incidentId, e) => {
     if (e) e.stopPropagation();
-    setResolvingId(incidentId);
     try {
       await resolveIncident(incidentId);
       setActionMessage({ type: 'success', text: `Incident ${incidentId} marked as resolved.` });
@@ -92,23 +129,87 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
     } catch (err) {
       setActionMessage({ type: 'error', text: `Failed to resolve incident: ${err.message}` });
     } finally {
-      setResolvingId(null);
       setTimeout(() => setActionMessage(null), 4000);
     }
   };
 
-  const handleUnfreezeGoal = async () => {
-    setUnfreezing(true);
+  const handleExecuteRecovery = async (recoveryAction, params = {}) => {
+    if (!selectedIncident) return;
+    setRecoveryLoading(true);
     try {
-      await unfreezeGoalAfterIncident(goalId);
-      setActionMessage({ type: 'success', text: 'Agent successfully unfreezed and resumed to ACTIVE.' });
+      const res = await recoverIncident(selectedIncident.incidentId, recoveryAction, params);
+      setActionMessage({
+        type: 'success',
+        text: `Recovery '${recoveryAction}' executed successfully: ${res.result?.message || 'Done'}`,
+      });
+      if (recoveryAction === 'CONTINUE' && onUnfreezeSuccess) {
+        onUnfreezeSuccess();
+      }
+      setEvolveModalOpen(false);
+      await fetchIncidentsData();
+    } catch (err) {
+      setActionMessage({ type: 'error', text: `Recovery failed: ${err.message}` });
+    } finally {
+      setRecoveryLoading(false);
+      setTimeout(() => setActionMessage(null), 4000);
+    }
+  };
+
+  const handleCreateManualCheckpoint = async () => {
+    try {
+      const chk = await createCheckpoint(goalId, `Manual Operator Checkpoint`);
+      setActionMessage({
+        type: 'success',
+        text: `State Checkpoint ${chk.checkpointId} created (${chk.fileCount} sandbox files captured).`,
+      });
+      await fetchIncidentsData();
+    } catch (err) {
+      setActionMessage({ type: 'error', text: `Failed to create checkpoint: ${err.message}` });
+    } finally {
+      setTimeout(() => setActionMessage(null), 4000);
+    }
+  };
+
+  const handleRollbackCheckpoint = async (chkId) => {
+    const targetId = chkId || selectedCheckpointForRollback;
+    if (!targetId) return;
+    try {
+      const res = await rollbackCheckpoint(targetId, goalId);
+      setActionMessage({
+        type: 'success',
+        text: `Rollback completed: ${res.message} (${res.restoredFilesCount} files restored).`,
+      });
       if (onUnfreezeSuccess) onUnfreezeSuccess();
       await fetchIncidentsData();
     } catch (err) {
-      setActionMessage({ type: 'error', text: `Failed to unfreeze agent: ${err.message}` });
+      setActionMessage({ type: 'error', text: `Rollback failed: ${err.message}` });
     } finally {
-      setUnfreezing(false);
       setTimeout(() => setActionMessage(null), 4000);
+    }
+  };
+
+  const handleVerifyAuditChain = async () => {
+    setVerifyingAudit(true);
+    try {
+      const res = await verifyAuditChain(goalId);
+      setAuditVerification(res);
+      setActionMessage({
+        type: res.isValid ? 'success' : 'error',
+        text: res.summary,
+      });
+    } catch (err) {
+      setActionMessage({ type: 'error', text: `Audit verification failed: ${err.message}` });
+    } finally {
+      setVerifyingAudit(false);
+      setTimeout(() => setActionMessage(null), 5000);
+    }
+  };
+
+  const handleCopyExplanation = () => {
+    if (forensicExplanation?.formattedText) {
+      navigator.clipboard.writeText(forensicExplanation.formattedText);
+      setCopiedText(true);
+      setTimeout(() => setCopiedText(false), 2000);
     }
   };
 
@@ -245,10 +346,9 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
         </div>
       )}
 
-      {/* Top Banner & High-Level SOC Metrics */}
+      {/* Top Banner: Metrics & Global Forensic Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4 rounded-2xl bg-gradient-to-br from-red-950/30 via-transparent to-transparent border border-red-500/30 shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-full blur-2xl pointer-events-none" />
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5">
               <ShieldAlert size={14} className="animate-pulse" />
@@ -284,57 +384,127 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
           </p>
         </div>
 
-        <div className="card p-4 rounded-2xl bg-gradient-to-br from-cyan-950/30 via-transparent to-transparent border border-cyan-500/30 shadow-lg">
+        <div className="card p-4 rounded-2xl bg-gradient-to-br from-cyan-950/30 via-transparent to-transparent border border-cyan-500/30 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-              <Layers size={14} />
-              Total Incidents
+              <Play size={14} />
+              Session Replay
             </span>
             <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 font-mono font-bold">
-              ALL TIME
+              TIMELINE
             </span>
           </div>
-          <div className="text-3xl font-extrabold text-white mt-2">
-            {summary?.total || 0}
+          <div className="mt-2">
+            <button
+              onClick={() => setReplayModalOpen(true)}
+              className="w-full btn-primary py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20"
+              style={{ background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', border: 'none' }}
+            >
+              <Play size={13} />
+              <span>Launch Session Replay</span>
+            </button>
           </div>
-          <p className="text-[0.7rem] text-[var(--color-text-muted)] mt-1">
-            {summary?.severity?.CRITICAL || 0} Critical &bull; {summary?.severity?.HIGH || 0} High
-          </p>
         </div>
 
         <div className="card p-4 rounded-2xl bg-gradient-to-br from-indigo-950/30 via-transparent to-transparent border border-indigo-500/30 shadow-lg flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-              <Unlock size={14} />
-              Containment Controls
+              <FileCheck size={14} />
+              Audit Hash Chain
             </span>
-            <span className="text-[0.65rem] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono font-bold">
-              REMEDY
-            </span>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
             <button
-              onClick={handleUnfreezeGoal}
-              disabled={unfreezing}
-              className="flex-1 btn-primary py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20"
-              style={{ background: 'linear-gradient(135deg, #0ea5e9, #6366f1)', border: 'none' }}
-              title="Unfreeze agent from containment pause"
+              onClick={handleVerifyAuditChain}
+              disabled={verifyingAudit}
+              className="text-[0.65rem] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono font-bold hover:bg-indigo-500/30 flex items-center gap-1 transition-all"
             >
-              <Unlock size={13} className={unfreezing ? 'animate-spin' : ''} />
-              <span>{unfreezing ? 'Unfreezing...' : 'Unfreeze Agent'}</span>
+              <RefreshCw size={10} className={verifyingAudit ? 'animate-spin' : ''} />
+              <span>Verify</span>
             </button>
-            {onModifyGoalRequest && (
-              <button
-                onClick={onModifyGoalRequest}
-                className="btn-secondary py-2 px-2.5 text-xs font-bold text-gray-300 hover:text-white"
-                title="Update policy constraints"
-              >
-                Modify Goal
-              </button>
-            )}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-[var(--color-text-muted)] text-[0.7rem]">
+              {auditVerification ? (
+                auditVerification.isValid ? (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <CheckCircle2 size={12} /> {auditVerification.verifiedBlocks} Blocks Verified
+                  </span>
+                ) : (
+                  <span className="text-red-400 font-bold flex items-center gap-1">
+                    <AlertTriangle size={12} /> Tamper Detected
+                  </span>
+                )
+              ) : (
+                'SHA-256 Ledger Connected'
+              )}
+            </span>
+            <button
+              onClick={() => setCheckpointsOpen(!checkpointsOpen)}
+              className="text-[0.7rem] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1"
+            >
+              Checkpoints ({checkpoints.length})
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Checkpoints Drawer (When Opened) */}
+      {checkpointsOpen && (
+        <div className="card p-4 rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-950/30 via-[var(--color-bg-primary)] to-[var(--color-bg-secondary)] shadow-xl animate-fade-in space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <GitBranch size={16} className="text-indigo-400" />
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-white">
+                Sandbox Checkpoint &amp; Rollback Manager
+              </h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCreateManualCheckpoint}
+                className="btn-secondary py-1 px-2.5 text-xs font-bold text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/10"
+              >
+                + Create Checkpoint
+              </button>
+              <button
+                onClick={() => setCheckpointsOpen(false)}
+                className="text-gray-400 hover:text-white text-xs"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto no-scrollbar">
+            {checkpoints.length === 0 ? (
+              <p className="text-xs text-[var(--color-text-muted)] py-4 text-center col-span-3">
+                No checkpoints recorded yet. Automatic checkpoints are created before high-impact actions.
+              </p>
+            ) : (
+              checkpoints.map((chk) => (
+                <div
+                  key={chk.checkpointId}
+                  className="p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-primary)] flex items-center justify-between text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="font-mono text-cyan-400 font-bold truncate text-[0.7rem]">
+                      {chk.checkpointId}
+                    </div>
+                    <div className="text-white font-medium truncate text-[0.7rem]">{chk.label}</div>
+                    <div className="text-[0.6rem] text-[var(--color-text-muted)]">
+                      {chk.fileCount} files &bull; {new Date(chk.createdAt).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRollbackCheckpoint(chk.checkpointId)}
+                    className="btn-primary py-1 px-2 text-[0.65rem] font-bold bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 ml-2"
+                  >
+                    Rollback
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 7-Layer Threat Intelligence Matrix */}
       <div className="card p-5 rounded-2xl border border-[var(--color-border)] shadow-xl space-y-4">
@@ -401,9 +571,9 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
         </div>
       </div>
 
-      {/* Main 2-Column Incident Forensics Section */}
+      {/* Main 2-Column Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (5 Cols) — Incident Feed & Filters */}
+        {/* Left Column (5 Cols) — Incident Feed */}
         <div className="lg:col-span-5 space-y-4">
           <div className="card p-4 rounded-2xl border border-[var(--color-border)] shadow-xl space-y-3">
             <div className="flex items-center justify-between">
@@ -455,10 +625,10 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
             </div>
 
             {/* Incident List Items */}
-            <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1 no-scrollbar">
+            <div className="space-y-2.5 max-h-[650px] overflow-y-auto pr-1 no-scrollbar">
               {filteredIncidents.length === 0 ? (
                 <div className="text-center py-10 text-[var(--color-text-muted)] text-xs">
-                  <ShieldCheck size={32} className="mx-auto text-emerald-400 mb-2 opacity-80" />
+                  <CheckCircle2 size={32} className="mx-auto text-emerald-400 mb-2 opacity-80" />
                   <p className="font-bold">No security incidents matching current filters.</p>
                   <p className="text-[0.65rem] mt-1">All agent actions are safely aligned with policy.</p>
                 </div>
@@ -479,7 +649,6 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
                           : 'bg-[var(--color-bg-primary)] border-[var(--color-border)] hover:border-cyan-500/40'
                       }`}
                     >
-                      {/* Left accent color bar */}
                       <div
                         className={`absolute left-0 top-0 bottom-0 w-1 ${
                           isOpen ? (inc.severity === 'CRITICAL' ? 'bg-red-500' : 'bg-amber-500') : 'bg-emerald-500'
@@ -529,20 +698,9 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
 
                       <div className="mt-2.5 pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[0.6rem] text-[var(--color-text-muted)]">
                         <span>{new Date(inc.createdAt || Date.now()).toLocaleTimeString()}</span>
-                        <div className="flex items-center gap-2">
-                          {isOpen && (
-                            <button
-                              onClick={(e) => handleResolve(inc.incidentId, e)}
-                              disabled={resolvingId === inc.incidentId}
-                              className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 font-bold transition-all"
-                            >
-                              {resolvingId === inc.incidentId ? 'Resolving...' : 'Resolve'}
-                            </button>
-                          )}
-                          <span className="text-cyan-400 font-bold flex items-center gap-0.5">
-                            Inspect <ChevronRight size={10} />
-                          </span>
-                        </div>
+                        <span className="text-cyan-400 font-bold flex items-center gap-0.5">
+                          Inspect <ChevronRight size={10} />
+                        </span>
                       </div>
                     </div>
                   );
@@ -552,11 +710,11 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
           </div>
         </div>
 
-        {/* Right Column (7 Cols) — Interactive Attack Chain Visualizer & Deep Forensic Inspection */}
+        {/* Right Column (7 Cols) — Deep Forensic Explanation, Blast Radius & 5-Option Recovery */}
         <div className="lg:col-span-7 space-y-4">
           {selectedIncident ? (
             <div className="card p-5 rounded-2xl border border-[var(--color-border)] shadow-xl space-y-5">
-              {/* Incident Header & Action Controls */}
+              {/* Incident Header */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--color-border)] pb-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -581,183 +739,291 @@ export default function IncidentForensics({ goalId, onUnfreezeSuccess, onModifyG
                     </span>
                   </div>
                   <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                    Containment Action:{' '}
+                    Containment State:{' '}
                     <span className="font-bold text-red-400 font-mono">
                       {selectedIncident.containmentAction || 'AGENT_FROZEN'}
                     </span>{' '}
-                    &bull; Recorded at{' '}
-                    {new Date(selectedIncident.createdAt || Date.now()).toLocaleString()}
+                    &bull; Recorded at {new Date(selectedIncident.createdAt || Date.now()).toLocaleString()}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setReplayModalOpen(true)}
+                    className="btn-secondary text-xs px-3 py-1.5 font-bold flex items-center gap-1 text-cyan-400 border-cyan-500/40 hover:bg-cyan-500/10"
+                  >
+                    <Play size={12} />
+                    <span>Replay</span>
+                  </button>
                   {selectedIncident.status === 'OPEN' && (
                     <button
                       onClick={() => handleResolve(selectedIncident.incidentId)}
-                      disabled={resolvingId === selectedIncident.incidentId}
-                      className="btn-primary text-xs px-3.5 py-1.5 font-bold flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                      className="btn-primary text-xs px-3 py-1.5 font-bold flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white"
                     >
-                      <Check size={13} />
-                      <span>{resolvingId === selectedIncident.incidentId ? 'Resolving...' : 'Resolve Incident'}</span>
+                      <Check size={12} />
+                      <span>Resolve</span>
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* 10-Point "WHY BLOCKED" Forensic Explanation Card */}
+              {forensicExplanation && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-red-950/40 via-[var(--color-bg-primary)] to-[var(--color-bg-secondary)] border border-red-500/40 shadow-lg space-y-3">
+                  <div className="flex items-center justify-between border-b border-red-500/20 pb-2">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-red-300 flex items-center gap-1.5">
+                      <ShieldAlert size={14} className="text-red-400" />
+                      Forensic Explanation — WHY BLOCKED (10-Point Security Verdict)
+                    </h4>
+                    <button
+                      onClick={handleCopyExplanation}
+                      className="text-[0.65rem] font-bold text-gray-300 hover:text-white flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded border border-white/10"
+                    >
+                      {copiedText ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+                      <span>{copiedText ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">1. Original Goal</span>
+                      <span className="text-white font-medium text-[0.75rem] truncate block">{forensicExplanation.originalGoal}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">2. Current Action</span>
+                      <span className="font-mono text-amber-300 text-[0.75rem] truncate block">{forensicExplanation.currentAction}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">3. Source &amp; 5. Trust</span>
+                      <span className="text-cyan-300 text-[0.75rem]">{forensicExplanation.source} ({forensicExplanation.trustLevel})</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">4. Goal Alignment</span>
+                      <span className="text-red-400 font-mono font-bold text-[0.75rem]">{forensicExplanation.goalAlignment}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">6. Risk Level</span>
+                      <span className="text-red-400 font-bold text-[0.75rem]">{forensicExplanation.risk}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">7. Trajectory</span>
+                      <span className="text-amber-200 text-[0.75rem] truncate block">{forensicExplanation.trajectory}</span>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">8. Blast Radius Impact</span>
+                      <span className="text-red-300 font-mono text-[0.7rem] block leading-relaxed">{forensicExplanation.blastRadius}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">9. Gateway Decision</span>
+                      <span className="px-2 py-0.5 rounded bg-red-500 text-black font-extrabold text-[0.65rem] inline-block">
+                        {forensicExplanation.decision}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[var(--color-text-muted)] text-[0.65rem] block font-bold">10. Agent State</span>
+                      <span className="text-red-400 font-mono font-bold text-[0.75rem]">{forensicExplanation.agentState}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 5-Option Recovery Decision Control Bar */}
+              <div className="p-4 rounded-2xl bg-[var(--color-bg-primary)] border border-cyan-500/30 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                    <RotateCcw size={14} />
+                    Autonomous Recovery Controls (5-Option Decision Engine)
+                  </h4>
+                  <span className="text-[0.6rem] font-mono text-gray-400">SELECT ACTION</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {/* Option 1: Continue */}
                   <button
-                    onClick={handleUnfreezeGoal}
-                    disabled={unfreezing}
-                    className="btn-secondary text-xs px-3.5 py-1.5 font-bold flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 border border-cyan-500/40"
+                    onClick={() => handleExecuteRecovery('CONTINUE')}
+                    disabled={recoveryLoading}
+                    className="p-2.5 rounded-xl border border-emerald-500/40 bg-emerald-950/20 hover:bg-emerald-950/40 text-emerald-300 flex flex-col items-center justify-center gap-1 text-center transition-all"
                   >
-                    <Unlock size={13} />
-                    <span>Unfreeze</span>
+                    <Unlock size={14} />
+                    <span className="text-[0.65rem] font-bold">1. Continue</span>
+                    <span className="text-[0.55rem] text-gray-400">Unfreeze Agent</span>
+                  </button>
+
+                  {/* Option 2: Abort */}
+                  <button
+                    onClick={() => handleExecuteRecovery('ABORT')}
+                    disabled={recoveryLoading}
+                    className="p-2.5 rounded-xl border border-red-500/40 bg-red-950/20 hover:bg-red-950/40 text-red-300 flex flex-col items-center justify-center gap-1 text-center transition-all"
+                  >
+                    <Ban size={14} />
+                    <span className="text-[0.65rem] font-bold">2. Abort</span>
+                    <span className="text-[0.55rem] text-gray-400">Terminate Session</span>
+                  </button>
+
+                  {/* Option 3: Rollback Checkpoint */}
+                  <button
+                    onClick={() => handleExecuteRecovery('ROLLBACK_CHECKPOINT')}
+                    disabled={recoveryLoading || checkpoints.length === 0}
+                    className="p-2.5 rounded-xl border border-indigo-500/40 bg-indigo-950/20 hover:bg-indigo-950/40 text-indigo-300 flex flex-col items-center justify-center gap-1 text-center transition-all disabled:opacity-40"
+                  >
+                    <RotateCcw size={14} />
+                    <span className="text-[0.65rem] font-bold">3. Rollback</span>
+                    <span className="text-[0.55rem] text-gray-400">Restore Sandbox</span>
+                  </button>
+
+                  {/* Option 4: Evolve Goal */}
+                  <button
+                    onClick={() => setEvolveModalOpen(true)}
+                    disabled={recoveryLoading}
+                    className="p-2.5 rounded-xl border border-cyan-500/40 bg-cyan-950/20 hover:bg-cyan-950/40 text-cyan-300 flex flex-col items-center justify-center gap-1 text-center transition-all"
+                  >
+                    <Sliders size={14} />
+                    <span className="text-[0.65rem] font-bold">4. Evolve Goal</span>
+                    <span className="text-[0.55rem] text-gray-400">Update Policy V2</span>
+                  </button>
+
+                  {/* Option 5: New Session */}
+                  <button
+                    onClick={() => handleExecuteRecovery('START_NEW_SESSION')}
+                    disabled={recoveryLoading}
+                    className="p-2.5 rounded-xl border border-gray-500/40 bg-gray-900/30 hover:bg-gray-900/50 text-gray-300 flex flex-col items-center justify-center gap-1 text-center transition-all"
+                  >
+                    <RefreshCw size={14} />
+                    <span className="text-[0.65rem] font-bold">5. Reset</span>
+                    <span className="text-[0.55rem] text-gray-400">New Session</span>
                   </button>
                 </div>
               </div>
 
-              {/* Interactive Attack Chain Directed Graph */}
-              <div className="p-4 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border)] space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-text-primary)] flex items-center gap-2">
-                    <Sparkles size={14} className="text-cyan-400" />
-                    Multi-Step Attack Kill-Chain Graph
-                  </h4>
-                  <span className="text-[0.6rem] font-mono text-gray-400">
-                    {selectedIncident.attackChain?.nodeCount || (selectedIncident.attackChain?.nodes?.length ?? 1)} NODES
-                  </span>
-                </div>
-
-                {/* Kill Chain Flow Steps */}
-                <div className="p-3 rounded-lg bg-[var(--color-bg-secondary)] border border-[var(--color-border)]/60 overflow-x-auto no-scrollbar">
-                  <div className="flex items-center gap-2 min-w-max py-2">
-                    {selectedIncident.attackChain?.nodes && selectedIncident.attackChain.nodes.length > 0 ? (
-                      selectedIncident.attackChain.nodes.map((node, idx) => (
-                        <div key={node.nodeId || idx} className="flex items-center gap-2">
-                          <div className="p-2.5 rounded-xl border border-red-500/40 bg-gradient-to-br from-red-950/40 to-[var(--color-bg-primary)] shadow-md min-w-[170px] max-w-[200px]">
-                            <div className="flex items-center justify-between text-[0.6rem]">
-                              <span className="font-mono text-cyan-400 font-bold">
-                                {node.roleInAttack || `STAGE ${idx + 1}`}
-                              </span>
-                              <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-bold">
-                                {node.decision || 'BLOCK'}
-                              </span>
-                            </div>
-                            <div className="text-xs font-bold text-white mt-1 truncate">
-                              {node.actionType || 'INTERCEPTED_ACTION'}
-                            </div>
-                            <div className="text-[0.65rem] text-amber-300 font-mono truncate mt-0.5">
-                              {node.target || 'target'}
-                            </div>
-                          </div>
-
-                          {idx < selectedIncident.attackChain.nodes.length - 1 && (
-                            <div className="flex flex-col items-center justify-center px-1 text-cyan-400">
-                              <ArrowRight size={16} className="animate-pulse text-red-400" />
-                              <span className="text-[0.55rem] font-mono text-[var(--color-text-muted)]">
-                                {selectedIncident.attackChain?.edges?.[idx]?.relation || 'escalates'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      // Single Node Containment Fallback Graph
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl border border-cyan-500/40 bg-cyan-950/20 shadow-md min-w-[160px]">
-                          <div className="text-[0.6rem] font-mono text-cyan-400 font-bold">STAGE 1: VECTOR</div>
-                          <div className="text-xs font-bold text-white mt-1">
-                            {selectedIncident.actionType || 'PROPOSED_ACTION'}
-                          </div>
-                          <div className="text-[0.65rem] text-amber-300 font-mono truncate mt-0.5">
-                            {selectedIncident.target || 'Target Resource'}
-                          </div>
-                        </div>
-
-                        <ArrowRight size={16} className="text-red-400 animate-pulse" />
-
-                        <div className="p-2.5 rounded-xl border border-red-500/50 bg-red-950/40 shadow-md min-w-[180px]">
-                          <div className="flex items-center justify-between text-[0.6rem]">
-                            <span className="font-mono text-red-400 font-bold">GATEWAY INTERCEPTION</span>
-                            <span className="px-1.5 py-0.2 rounded bg-red-500 text-black font-extrabold">
-                              BLOCKED
-                            </span>
-                          </div>
-                          <div className="text-xs font-bold text-white mt-1">Autonomous Containment</div>
-                          <div className="text-[0.65rem] text-red-300 mt-0.5">Agent Frozen (PAUSED)</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Forensic Evidence & Breakdown */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-text-primary)] flex items-center gap-2">
-                  <FileCode size={14} className="text-amber-400" />
-                  Forensic Telemetry Evidence
-                </h4>
-
-                <div className="p-3.5 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border)] space-y-2 text-xs">
-                  <div className="flex items-start gap-2">
-                    <span className="text-[var(--color-text-muted)] font-bold shrink-0 w-24">Trigger:</span>
-                    <span className="text-red-300 font-semibold leading-relaxed">
-                      {selectedIncident.triggerReason || 'Severe security violation detected.'}
+              {/* Multidimensional Blast Radius Surface Breakdown */}
+              {selectedIncident.blastRadius && (
+                <div className="p-4 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border)] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <Lock size={14} />
+                      Multidimensional Blast Radius Assessment
+                    </h4>
+                    <span className="text-[0.65rem] font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/40">
+                      Level: {selectedIncident.blastRadius.blastRadiusLevel || 'CRITICAL'} ({selectedIncident.blastRadius.blastRadiusScore || 85}%)
                     </span>
                   </div>
 
-                  <div className="flex items-start gap-2">
-                    <span className="text-[var(--color-text-muted)] font-bold shrink-0 w-24">Target Payload:</span>
-                    <span className="font-mono text-amber-300 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-500/30 truncate">
-                      {selectedIncident.target || 'N/A'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <span className="text-[var(--color-text-muted)] font-bold shrink-0 w-24">Action Type:</span>
-                    <span className="font-mono text-cyan-300 bg-cyan-950/30 px-2 py-0.5 rounded border border-cyan-500/30">
-                      {selectedIncident.actionType || 'FILE_READ'}
-                    </span>
-                  </div>
-
-                  {selectedIncident.evidence && selectedIncident.evidence.length > 0 && (
-                    <div className="pt-2 border-t border-[var(--color-border)]/50">
-                      <span className="text-[var(--color-text-muted)] font-bold block mb-1">
-                        Detected Attack Artifacts:
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                      <span className="text-[0.65rem] text-[var(--color-text-muted)] font-bold block">Files Targeted</span>
+                      <span className="font-mono text-amber-300 text-[0.7rem] truncate block mt-0.5">
+                        {selectedIncident.blastRadius.filesAffected?.length > 0
+                          ? selectedIncident.blastRadius.filesAffected.join(', ')
+                          : 'None'}
                       </span>
-                      <ul className="space-y-1 text-[0.7rem] text-gray-300">
-                        {selectedIncident.evidence.map((ev, idx) => (
-                          <li key={idx} className="flex items-start gap-1.5">
-                            <span className="text-red-400 mt-0.5">&bull;</span>
-                            <span className="font-mono leading-relaxed">{ev}</span>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Remediation Guidance */}
-              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-950/30 via-indigo-950/20 to-transparent border border-blue-500/30 flex items-start gap-3">
-                <Shield className="text-blue-400 shrink-0 mt-0.5" size={18} />
-                <div className="text-xs space-y-1">
-                  <div className="font-bold text-white">Recommended Security Engineer Action</div>
+                    <div className="p-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                      <span className="text-[0.65rem] text-[var(--color-text-muted)] font-bold block">Database Objects</span>
+                      <span className="font-mono text-cyan-300 text-[0.7rem] truncate block mt-0.5">
+                        {selectedIncident.blastRadius.databaseObjectsAffected?.length > 0
+                          ? selectedIncident.blastRadius.databaseObjectsAffected.join(', ')
+                          : 'None'}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                      <span className="text-[0.65rem] text-[var(--color-text-muted)] font-bold block">Network Endpoints</span>
+                      <span className="font-mono text-emerald-300 text-[0.7rem] truncate block mt-0.5">
+                        {selectedIncident.blastRadius.networkDestinations?.length > 0
+                          ? selectedIncident.blastRadius.networkDestinations.join(', ')
+                          : 'None'}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-[var(--color-bg-secondary)] border border-[var(--color-border)]">
+                      <span className="text-[0.65rem] text-[var(--color-text-muted)] font-bold block">Privileges Required</span>
+                      <span className="font-mono text-red-300 text-[0.7rem] truncate block mt-0.5">
+                        {selectedIncident.blastRadius.privilegesRequired || 'STANDARD_USER'}
+                      </span>
+                    </div>
+                  </div>
+
                   <p className="text-[0.7rem] text-[var(--color-text-muted)] leading-relaxed">
-                    Verify whether the prompt injection vector originated from untrusted web retrieval or tool poisoning.
-                    Once validated, resolve the incident and unfreeze the agent or adjust the goal constraints policy.
+                    {selectedIncident.blastRadius.summary}
                   </p>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="card p-12 rounded-2xl border border-[var(--color-border)] shadow-xl text-center space-y-3">
-              <ShieldCheck size={48} className="mx-auto text-cyan-400 opacity-80" />
+              <CheckCircle2 size={48} className="mx-auto text-cyan-400 opacity-80" />
               <h3 className="text-base font-extrabold text-white">No Incident Selected</h3>
               <p className="text-xs text-[var(--color-text-muted)] max-w-sm mx-auto">
-                Select an incident from the security feed on the left to inspect its multi-step attack chain and telemetry evidence.
+                Select an incident from the security feed on the left to inspect its 10-point explanation, blast radius, and recovery options.
               </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Evolve Goal Modal Dialog */}
+      {evolveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="card w-full max-w-lg p-5 rounded-2xl border border-cyan-500/40 bg-[var(--color-bg-secondary)] shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <Sliders size={16} className="text-cyan-400" />
+                Evolve Goal &amp; Expand Policy (V2)
+              </h3>
+              <button onClick={() => setEvolveModalOpen(false)} className="text-gray-400 hover:text-white">
+                <XCircle size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+              If the blocked action was legitimately intended, update the goal statement or add explicit scope permissions.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-300">Evolved Goal Objective:</label>
+              <textarea
+                value={evolveGoalText}
+                onChange={(e) => setEvolveGoalText(e.target.value)}
+                placeholder="e.g. Build React application with backend server routes..."
+                rows={3}
+                className="w-full p-2.5 rounded-xl bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-xs text-white focus:border-cyan-500 outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setEvolveModalOpen(false)}
+                className="btn-secondary py-1.5 px-3 text-xs font-bold text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleExecuteRecovery('EVOLVE_GOAL', { evolvedGoal: evolveGoalText })}
+                disabled={!evolveGoalText.trim() || recoveryLoading}
+                className="btn-primary py-1.5 px-4 text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white"
+              >
+                Apply Evolved Goal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Replay Modal */}
+      <SessionReplayModal
+        isOpen={replayModalOpen}
+        onClose={() => setReplayModalOpen(false)}
+        goalId={goalId}
+      />
     </div>
   );
 }

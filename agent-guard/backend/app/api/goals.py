@@ -874,3 +874,14 @@ async def run_real_world_booking_simulation():
         "stepsExecuted": len(results),
         "actions": results
     }
+
+
+@router.get("/goals/{goal_id}/replay")
+async def get_goal_session_replay(goal_id: str):
+    """
+    Fetch interactive session replay timeline:
+    USER GOAL -> ACTION 1 -> ACTION 2 -> ACTION 3 -> ATTACK -> BLOCK
+    """
+    from app.services.session_replay import generate_session_replay
+    replay_data = await generate_session_replay(goal_id)
+    return replay_data

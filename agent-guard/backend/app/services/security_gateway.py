@@ -35,6 +35,8 @@ from app.services.mcp_security import inspect_mcp_invocation
 from app.services.exfiltration_detector import detect_exfiltration_chain
 from app.services.attack_chain_engine import evaluate_attack_chain
 from app.services.incident_manager import create_security_incident
+from app.services.blast_radius_engine import calculate_blast_radius
+from app.services.checkpoint_service import create_checkpoint
 
 logger = logging.getLogger("agent_guard.security_gateway")
 
@@ -313,6 +315,14 @@ async def authorize_and_execute(
 
     decision = auth["decision"]
 
+    # ── Step 7.5: Calculate Multidimensional Blast Radius (Phase 4) ──
+    blast_radius = calculate_blast_radius(
+        action_type=action_type_clean,
+        target=target_clean,
+        description=description,
+        user_goal=user_goal
+    )
+
     # ── Step 8: Automatic Incident Creation & Agent Pausing Check ──
     should_create_incident = (
         decision == "BLOCK" and (
@@ -355,7 +365,7 @@ async def authorize_and_execute(
                 }
             )
 
-    # If critical incident detected, record to 'incidents' collection
+    # If critical incident detected, record to 'incidents' collection with full Blast Radius & Forensic snapshot
     if should_create_incident:
         await create_security_incident(
             goal_id=goal_id,
@@ -366,8 +376,27 @@ async def authorize_and_execute(
             target=target_clean,
             evidence=attack_chain.get("evidence", [auth["reason"]]) if ('attack_chain' in locals() and attack_chain) else [auth["reason"]],
             attack_chain=attack_chain if 'attack_chain' in locals() else None,
-            trigger_reason=auth["reason"]
+            trigger_reason=auth["reason"],
+            blast_radius=blast_radius,
+            previous_actions=previous_actions,
+            user_goal=user_goal,
+            goal_version=goal_version,
+            source=source,
+            alignment_score=integrity.get("goalAlignmentScore", 0),
+            source_trust=integrity.get("sourceTrustLevel", "UNTRUSTED"),
+            risk_level=risk.get("riskLevel", "CRITICAL")
         )
+
+    # Automated Pre-Execution Checkpoint before High-Impact / High Blast-Radius operations
+    if decision in ("ALLOW", "REQUIRE_APPROVAL") and (blast_radius["blastRadiusLevel"] in ("HIGH", "CRITICAL") or consequence_level in ("HIGH", "CRITICAL")):
+        try:
+            await create_checkpoint(
+                goal_id=goal_id,
+                label=f"Pre-{action_type_clean} Checkpoint ({target_clean})",
+                metadata={"actionType": action_type_clean, "target": target_clean, "blastRadius": blast_radius["blastRadiusLevel"]}
+            )
+        except Exception as chk_err:
+            logger.warning(f"Auto-checkpoint notice: {chk_err}")
 
     action_class = classify_action(
         alignment_score=integrity["goalAlignmentScore"],
@@ -444,6 +473,7 @@ async def authorize_and_execute(
         "riskScore": risk["riskScore"],
         "cumulativeRiskScore": cumulative_risk["cumulativeRiskScore"],
         "cumulativeRiskLevel": cumulative_risk["cumulativeRiskLevel"],
+        "blastRadius": blast_radius,
         "actionClassification": action_class,
         "decision": decision,
         "reason": auth["reason"],
